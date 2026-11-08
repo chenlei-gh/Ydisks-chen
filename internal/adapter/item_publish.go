@@ -174,6 +174,18 @@ func (p *ItemPublishPort) publish(ctx context.Context, input itemapp.PublishInpu
 	mtopCtx, cookieSession := withCookieSnapshot(requestCtx, latest)
 	// initialValue、initialMetadata 保存远端调用前的凭证快照，用于提交阶段复核。
 	initialValue, initialMetadata := latest.Value, latest.MetadataJSON
+	// publishStarted 标记最终商品创建请求前的持久化闸门是否已成功通过。
+	// 闸门通过后，即使响应表现为 Session 过期，也不能假定远端没有创建商品。
+	publishStarted := false
+	beforePublish := func(hookCtx context.Context) error {
+		if input.BeforePublish != nil {
+			if hookErr := input.BeforePublish(hookCtx); hookErr != nil {
+				return hookErr
+			}
+		}
+		publishStarted = true
+		return nil
+	}
 	// unlock 在远端调用前释放，避免慢速平台 I/O 占用账号凭证锁。
 	unlock()
 	// result、callErr 保存平台发布结果及调用错误。
@@ -182,6 +194,7 @@ func (p *ItemPublishPort) publish(ctx context.Context, input itemapp.PublishInpu
 		OriginalPriceCents: input.OriginalPriceCents, Quantity: input.Quantity,
 		PostageMode: input.PostageMode, PostageCents: input.PostageCents, Virtual: true,
 		Location: location, PreferredCategory: preferredCategory, Images: images, Specs: specs, SKUs: skuRows, SpecImages: specImages,
+		BeforePublish: beforePublish,
 	})
 	// callErr 由适配器转换为应用层错误，保留原始错误链供基础设施恢复逻辑使用。
 	callErr = publishErrorToApplication(callErr)
@@ -194,7 +207,7 @@ func (p *ItemPublishPort) publish(ctx context.Context, input itemapp.PublishInpu
 		if persistErr != nil {
 			callErr = errors.Join(callErr, fmt.Errorf("保存发布响应 Cookie: %w", persistErr))
 		}
-		if allowRetry && mtop.IsSessionExpiredErr(callErr) && p.recoverExpired(ctx, input.CookieID, callErr) {
+		if allowRetry && !publishStarted && mtop.IsSessionExpiredErr(callErr) && p.recoverExpired(ctx, input.CookieID, callErr) {
 			return p.publish(ctx, input, false)
 		}
 		p.recoverExpired(ctx, input.CookieID, callErr)
