@@ -177,8 +177,10 @@ func (p *ItemPublishPort) publish(ctx context.Context, input itemapp.PublishInpu
 	// publishStarted 标记最终商品创建请求前的持久化闸门是否已成功通过。
 	// 闸门通过后，即使响应表现为 Session 过期，也不能假定远端没有创建商品。
 	publishStarted := false
+	// beforePublish 在最终商品创建请求前执行持久化闸门。
 	beforePublish := func(hookCtx context.Context) error {
 		if input.BeforePublish != nil {
+			// hookErr 保存应用层持久化闸门返回的错误。
 			if hookErr := input.BeforePublish(hookCtx); hookErr != nil {
 				return hookErr
 			}
