@@ -293,6 +293,7 @@ func TestItemPublishPortDoesNotReplayAfterFinalPublishGate(t *testing.T) {
 	// recovery 模拟凭证恢复成功；但最终发布闸门通过后不应据此重放商品创建请求。
 	recovery := func(ctx context.Context, cookieID string, recoveryErr error) bool {
 		recovered = recoveryErr != nil
+		// updateErr 保存测试中写入恢复凭证时的错误。
 		if updateErr := store.Cookies.UpdateValueExisting(ctx, cookieID, "unb=1; fresh=1"); updateErr != nil {
 			t.Fatalf("写入恢复凭证失败: %v", updateErr)
 		}
