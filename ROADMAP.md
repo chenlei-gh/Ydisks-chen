@@ -81,7 +81,7 @@
 
 ### 阶段 2：P0 自动发货与补发缺口修复
 
-**当前修复批次**：P0 重复释放库存与 P1 人工补发台账结算已在分支提交；新增 SQLite/多方言回归测试，包括 `MarkSaleRecordsSold` 故障注入后补发收口兜底，详见 `P0_AUDIT.md`。当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)。PR 尚无可见 CI run/status，因此所有相关任务保持进行中，不标记为通过。
+**当前修复批次**：P0 重复释放库存与 P1 人工补发台账结算已提交；新增 SQLite/多方言回归测试。2026-11-08 云端首次全量 Go 测试已实际执行：除 `tools/architecturecheck` 内部的 `TestStageTwoRealSourceGate` 因 `internal/notify/notifier.go` 原有 808 行超限而失败外，其余 Go 包均通过；该失败促成通知格式化/订阅过滤逻辑拆分至 `internal/notify/notifier_events.go`。拆分后的完整复验仍待执行，不能提前标记阶段 2 通过。当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)。
 
 
 仅实施阶段 1 已证实的缺口。候选范围：
@@ -170,3 +170,12 @@
 - **剩余风险**：未验证的数据库、平台行为或边界
 
 > 更新本文件中的状态必须与代码和验证证据同步。不得仅因实现已提交就标记为完成。
+
+
+### 2026-11-08 云端验证与通知模块拆分记录
+
+- 首轮全量 `go test ./...`（commit `af7bdf2`）：所有业务包测试通过；唯一失败为 `tools/architecturecheck` 的 `TestStageTwoRealSourceGate`，明确指出 `internal/notify/notifier.go` 为 808 行。该测试失败使后续 race 步骤未执行。
+- 同轮 `gofmt` 修复提交 `b1055dd`；`go vet ./...`、`golangci-lint ./...`、注释检查、架构命令、OpenAPI 和 docs 一致性检查均通过。注意：架构命令通过不等于架构包中的真实源码门禁测试通过。
+- 已按职责拆分 `notifier.go`：事件级别/类型文案、事件格式化、订阅过滤、事件类型解析与排序函数迁入 `internal/notify/notifier_events.go`；主文件保留通知编排和发送入口。拆分后 `notifier.go` 为 552 行，新文件为 262 行（含 package/import/空行）；未修改通知语义。
+- 后续 commentlint 发现新文件首个私有函数缺少中文注释，已补充 `levelLabel` 注释。当前拆分后完整 Go 复验仍待运行；race、PR 全矩阵和多方言结果以最新 CI 为准。
+- 关键提交：`57b1283`（提取事件逻辑）、`20b283b`（缩减主文件）、`690df5d`（gofmt）、`2cac647`（补齐注释）。PR 保持 open，未合并；`main` 未修改。
