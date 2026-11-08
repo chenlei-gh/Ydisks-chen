@@ -97,9 +97,8 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 		if outcome.LocalSaveErr != nil {
 			return outcome, nil
 		}
-		// err 保存本地收口状态写入结果。
-		// err 保存本地商品写入完成后的账本收口结果。
-	if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID, operation.ErrorMessage); err != nil {
+		// err 保存远端确认后本地收口状态写入结果。
+		if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID, operation.ErrorMessage); err != nil {
 			return outcome, fmt.Errorf("本地商品已保存，但操作账本收口失败: %w", err)
 		}
 		return outcome, nil
