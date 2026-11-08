@@ -226,3 +226,11 @@
 - 远端请求已开始后遇到硬中断、网络未知、成功响应缺少 ItemID 或远端确认结果无法落库时，不得自动重发；同 ID 只能返回 `unknown/needs_review`。该 ID 不提供平台端 exactly-once 保证。
 - 实施范围应一次性包含 SQLite/MySQL/PostgreSQL migration、DB 原子状态转换、应用/适配器 hook、HTTP/OpenAPI、前端 ID 生命周期、重复请求/故障注入测试；不新增全局协调服务。
 - 本节为设计核查，不代表代码已实施或测试已运行。真实闲鱼平台测试仍暂停。
+
+
+### 2026-11-08 批量发布租约接管回归测试补充
+
+- 新增 `internal/db/item_publish_batches_recovery_test.go`：构造同一批次中两条不同远端阶段的明细，模拟旧 worker 租约到期和新 worker 接管。
+- 覆盖 `remote_started` 且无 ItemID 的行必须转为 `failed/uncertain_remote`，普通 `ResetFailed` 不得重新打开该行。
+- 覆盖已保存 ItemID/URL/raw JSON 的 `post_publish` 行在接管后回到可领取状态，保留远端检查点，并允许新 worker 完成 success 收口。
+- 本测试是 SQLite 真实数据库层面的状态迁移回归，不是完整 worker + 闲鱼平台 E2E；多数据库覆盖与 Go 全量结果以新 PR CI 为准。
