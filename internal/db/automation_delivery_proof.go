@@ -120,14 +120,21 @@ func (a *AutomationRules) ReleaseDeliveryReplay(ctx context.Context, runID int64
 // CompleteDeliveryReplay 将已经原样补发并完成确认发货的已领取运行收口为成功。
 // ctx 控制数据库更新；runID 和 attempt 防止旧 worker 覆盖新代次，快照必须继续保留给后续审计。
 func (a *AutomationRules) CompleteDeliveryReplay(ctx context.Context, runID int64, attempt int) error {
+	// tx、beginErr 让运行成功收口与本次补发遗留的 reserved 台账结算保持原子。
+	tx, beginErr := a.DB.BeginTx(ctx, nil)
+	if beginErr != nil {
+		return beginErr
+	}
+	defer func() { _ = tx.Rollback() }()
 	// result、updateErr 保存终态收口更新及其数据库错误；attempt 和补发领取状态共同隔离旧 worker。
-	result, updateErr := a.DB.ExecContext(ctx, `UPDATE automation_runs
+	result, updateErr := tx.ExecContext(ctx, `UPDATE automation_runs
 		SET status='success',error_message='',lease_expires_at=0,next_retry_at=0,action_started=0,updated_at=CURRENT_TIMESTAMP
 		WHERE id=? AND attempt_count=? AND status='running' AND action_started=1`, runID, attempt)
 	if updateErr != nil {
 		return updateErr
 	}
-	return requireAutomationRunOwner(result)
+	// 复用普通 FinishRun 的事务尾部：成功终态必须把该运行遗留的 reserved 台账确认成 sold。
+	return finishRunTail(ctx, tx, result, "success", runID)
 }
 
 // UpdateDeliveryReplayProof 保存补发期间新取得的发货快照，只有当前补发代次可以写入。
