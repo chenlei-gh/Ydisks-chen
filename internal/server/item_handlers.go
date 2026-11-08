@@ -803,8 +803,16 @@ func (s *Server) getSinglePublishOperation(w http.ResponseWriter, r *http.Reques
 		writeErr(w, http.StatusBadRequest, "缺少发布操作 ID")
 		return
 	}
+	// statusService 是应用服务提供的用户隔离操作状态查询能力。
+	statusService, ok := s.itemSinglePublishApplication().(interface {
+		GetPublishOperation(context.Context, int64, string) (itemapp.PublishOperation, error)
+	})
+	if !ok {
+		writeErr(w, http.StatusInternalServerError, "发布操作状态查询未初始化")
+		return
+	}
 	// operation 保存按用户归属查询的持久化状态。
-	operation, err := s.itemSinglePublishApplication().GetPublishOperation(r.Context(), session.UserID, operationID)
+	operation, err := statusService.GetPublishOperation(r.Context(), session.UserID, operationID)
 	if err != nil {
 		// 不区分不存在和其他用户的记录，避免通过状态接口探测他人操作。
 		writeErr(w, http.StatusNotFound, "发布操作不存在")
