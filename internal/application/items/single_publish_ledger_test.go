@@ -10,7 +10,7 @@ import (
 // ledgerTestFake 提供应用层发布账本的状态条件更新测试替身。
 type ledgerTestFake struct {
 	// mu 保护并发测试访问的操作快照。
-	mu         sync.Mutex
+	mu sync.Mutex
 	// operations 保存测试用户的发布操作快照。
 	operations map[string]PublishOperation
 }
@@ -84,15 +84,15 @@ func (l *ledgerTestFake) transition(userID int64, operationID, from, to string, 
 // ledgerPublisherFake 记录平台发布次数，并按测试场景模拟闸门和远端结果。
 type ledgerPublisherFake struct {
 	// calls 记录实际进入平台端口的调用次数。
-	calls             int
+	calls int
 	// result 是模拟的平台发布成功结果。
-	result            *PublishResult
+	result *PublishResult
 	// publishErr 是模拟的平台调用错误。
-	publishErr        error
+	publishErr error
 	// responseCookieErr 是平台成功后本地 Cookie 更新失败的模拟错误。
 	responseCookieErr error
 	// skipGate 表示模拟图片准备阶段失败，尚未通过最终创建请求闸门。
-	skipGate          bool
+	skipGate bool
 }
 
 func (p *ledgerPublisherFake) Publish(ctx context.Context, input PublishInput) (PublishOutcome, error) {
@@ -111,7 +111,7 @@ func (p *ledgerPublisherFake) Publish(ctx context.Context, input PublishInput) (
 // ledgerRepositoryFake 模拟本地商品 Upsert，并允许指定次数失败。
 type ledgerRepositoryFake struct {
 	// calls 记录本地商品 Upsert 次数。
-	calls    int
+	calls int
 	// failures 保存接下来需要模拟的 Upsert 失败次数。
 	failures int
 }
