@@ -194,7 +194,10 @@ const getOrCreateSinglePublishOperationID = async (
   }
   if (existingRaw) {
     // existing 保存当前账号上一次操作 ID 及其请求指纹。
-    const existing = JSON.parse(existingRaw) as { operationID?: string; fingerprint?: string };
+    const existing = JSON.parse(existingRaw) as {
+      /** operationID 是当前账号尚未清理的发布操作标识。 */ operationID?: string;
+      /** fingerprint 是该操作对应的完整请求指纹。 */ fingerprint?: string;
+    };
     if (existing.operationID && existing.fingerprint === digestHex) return existing.operationID;
     if (existing.operationID) {
       // previousOperation 保存上一次发布的服务端状态；查询失败时必须停止，不能降级生成新 ID。
@@ -223,7 +226,7 @@ const clearSinglePublishOperationID = (cookieID: string, operationID: string): v
   try {
     // stored 保存会话存储中的活动操作记录。
     const stored = window.sessionStorage.getItem(storageKey);
-    if (stored && (JSON.parse(stored) as { operationID?: string }).operationID === operationID) {
+    if (stored && (JSON.parse(stored) as { /** operationID 是待清理的当前操作标识。 */ operationID?: string }).operationID === operationID) {
       window.sessionStorage.removeItem(storageKey);
     }
   } catch {
