@@ -78,7 +78,6 @@ func (s *Server) getSinglePublishOperation(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-
 // writeSinglePublishCallError 将应用层单商品发布错误映射为稳定的 HTTP 错误响应。
 func (s *Server) writeSinglePublishCallError(w http.ResponseWriter, cookieID string, callErr error) {
 	// publishErr 保存可映射为专用 HTTP 状态码的应用层发布错误。
