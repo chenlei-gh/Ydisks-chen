@@ -189,7 +189,6 @@ func TestSinglePublishLedgerRecoversLocalSave(t *testing.T) {
 	}
 	// input 保存本次测试使用的稳定操作标识和指纹。
 	input := PublishInput{UserID: 7, CookieID: "account-7", OperationID: "op-recover", RequestFingerprint: "fp-a", Title: "test"}
-	// first、err 保存首次发布的结果及应用服务错误。
 	// first、err 保存当前发布调用的结果及应用服务错误。
 	first, err := service.PublishSingle(context.Background(), input)
 	if err != nil || first.LocalSaveErr == nil {
@@ -200,7 +199,6 @@ func TestSinglePublishLedgerRecoversLocalSave(t *testing.T) {
 	if err != nil || firstState.State != "remote_confirmed" {
 		t.Fatalf("operation=%+v err=%v want remote_confirmed", firstState, err)
 	}
-	// second、err 保存恢复本地商品写入后的结果及应用服务错误。
 	// second、err 保存当前恢复调用的结果及应用服务错误。
 	second, err := service.PublishSingle(context.Background(), input)
 	if err != nil || second.LocalSaveErr != nil || second.Result == nil || second.Result.ItemID != "item-123" {
