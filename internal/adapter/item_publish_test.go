@@ -191,7 +191,6 @@ func TestItemPublishPortRetriesAfterSessionRecovery(t *testing.T) {
 	// recovery 保存测试用会话恢复回调，并模拟恢复逻辑写入的新凭证。
 	recovery := func(ctx context.Context, cookieID string, recoveryErr error) bool {
 		recovered = recoveryErr != nil
-		// updateErr 保存模拟续期凭证写入的持久化错误。
 		// updateErr 保存模拟恢复凭证的数据库写入错误。
 		if updateErr := store.Cookies.UpdateValueExisting(ctx, cookieID, "unb=1; fresh=1"); updateErr != nil {
 			t.Fatalf("写入续期凭证失败: %v", updateErr)
