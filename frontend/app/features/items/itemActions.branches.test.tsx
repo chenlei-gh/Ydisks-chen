@@ -7,7 +7,7 @@ import * as api from './api';
 import { emptyPublishItemForm,useItemActions,type ItemActionsOptions,type PublishItemForm } from './itemActions';
 
 vi.mock('./api', /* branchApiMockFactory 提供商品动作分支测试的确定性 API 替身。 */ () => ({
-  createItem: vi.fn(), deleteItem: vi.fn(), getPublishLocations: vi.fn(),
+  createItem: vi.fn(), deleteItem: vi.fn(), getPublishLocations: vi.fn(), getSinglePublishOperation: vi.fn(),
   itemErrorMessage: /* errorMessageMock 将异常转换为稳定文本。 */ (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback,
   publishItem: vi.fn(), recommendPublishCategory: vi.fn(), syncItemsFromAccount: vi.fn(), updateItem: vi.fn(),
 }));
@@ -47,8 +47,9 @@ const validForm = (/* patch 覆盖默认字段。 */ patch: Partial<PublishItemF
 describe('useItemActions 分支', /* 当前套件覆盖校验提示、异常路径、类目推荐竞态与定位分支。 */ () => {
   // alertMock 记录用户可见提示。
   let alertMock: ReturnType<typeof vi.fn>;
-  beforeEach(/* 当前回调重置 API 与全局替身。 */ () => {
+  beforeEach(/* 当前回调重置 API、会话存储与全局替身。 */ () => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     alertMock = vi.fn();
     vi.stubGlobal('alert', alertMock);
     vi.stubGlobal('confirm', vi.fn(/* acceptConfirm 总是确认。 */ () => true));
