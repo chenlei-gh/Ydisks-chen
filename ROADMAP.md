@@ -189,3 +189,12 @@
 - 本次 CI 对应最新 PR head；最终 head 相比前一个已完成完整复验的源码提交仅清理临时验证 workflow，没有额外业务源码变更。
 - 验收边界：CI 证明自动化测试环境中的代码与数据库行为通过，不证明闲鱼真实账号/真实订单平台 E2E；本轮未执行真实买家、真实订单或真实账号操作。
 - PR #1 仍保持 open、未合并；`main` 未修改。是否合并由仓库所有者另行决定。
+
+
+### 2026-11-08 批量发布租约接管回归测试补充
+
+- 新增 `internal/db/item_publish_batches_recovery_test.go`：构造同一批次中两条不同远端阶段的明细，模拟旧 worker 租约到期和新 worker 接管。
+- 覆盖 `remote_started` 且无 ItemID 的行必须转为 `failed/uncertain_remote`，普通 `ResetFailed` 不得重新打开该行。
+- 覆盖已保存 ItemID/URL/raw JSON 的 `post_publish` 行在接管后回到可领取状态，保留远端检查点，并允许新 worker 完成 success 收口。
+- 本测试是 SQLite 真实数据库层面的状态迁移回归，不是完整 worker + 闲鱼平台 E2E；多数据库覆盖与 Go 全量结果以新 PR CI 为准。
+- 当前提交：`5182b7bbd3eb13f97ec2436c1183eaa6a49881fe`；分支 `ydisks-enhanced/batch-publish-recovery-tests`。
