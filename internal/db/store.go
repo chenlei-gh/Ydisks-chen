@@ -42,6 +42,8 @@ type Store struct {
 	UserSettings   *UserSettings
 	WSMessages     *WSMessageStore
 	PublishBatches *ItemPublishBatches
+	// SinglePublishOperations 保存单商品发布的远端请求检查点，未知结果不得自动重发。
+	SinglePublishOperations *SinglePublishOperations
 	Tokens         *AccountTokens
 	Renewal        *RenewalStore
 	LoginLogs      *AccountLoginLogs
