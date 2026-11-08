@@ -25,7 +25,7 @@ func TestPublishBatchLeaseTakeoverPreservesRemoteOutcome(t *testing.T) {
 	}
 	// createErr 保存批次和明细初始化失败的原因。
 	if createErr := store.PublishBatches.Create(ctx, batch, rows); createErr != nil {
-		t.Fatal(err)
+		t.Fatal(createErr)
 	}
 
 	// oldToken 标识模拟崩溃前持有租约的旧 worker。
@@ -69,7 +69,7 @@ func TestPublishBatchLeaseTakeoverPreservesRemoteOutcome(t *testing.T) {
 	// 模拟旧 worker 进程退出后租约到期。
 	// expireErr 保存将旧批次租约设置为已过期状态时的数据库错误。
 	if _, expireErr := store.DB.ExecContext(ctx,
-		"UPDATE item_publish_batches SET lease_expires_at=0 WHERE id=?", batch.ID); err != nil {
+		"UPDATE item_publish_batches SET lease_expires_at=0 WHERE id=?", batch.ID); expireErr != nil {
 		t.Fatal(expireErr)
 	}
 	// newToken 标识进程重启后接管批次的新 worker。
