@@ -20,17 +20,17 @@ var ErrSinglePublishOperationChanged = errors.New("单商品发布操作状态�
 
 // SinglePublishOperation 是单商品发布操作的持久化快照。
 type SinglePublishOperation struct {
-	OperationID       string
-	UserID            int64
-	CookieID          string
+	OperationID        string
+	UserID             int64
+	CookieID           string
 	RequestFingerprint string
-	State             string
-	ItemID            string
-	ItemURL           string
-	RawJSON           string
-	ErrorMessage      string
-	CreatedAt         string
-	UpdatedAt         string
+	State              string
+	ItemID             string
+	ItemURL            string
+	RawJSON            string
+	ErrorMessage       string
+	CreatedAt          string
+	UpdatedAt          string
 }
 
 // CreatePrepared 创建 prepared 状态操作；operation_id 唯一约束负责跨进程去重。
