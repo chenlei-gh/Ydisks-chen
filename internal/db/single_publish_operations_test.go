@@ -83,9 +83,11 @@ func TestSinglePublishOperationsUnknownCannotBeStartedAgain(t *testing.T) {
 		RequestFingerprint: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
 		State:              "prepared",
 	}
+	// createErr 保存创建 prepared 检查点的数据库执行结果。
 	if createErr := repository.CreatePrepared(context.Background(), operation); createErr != nil {
 		t.Fatalf("CreatePrepared: %v", createErr)
 	}
+	// startErr 保存 prepared -> started 状态迁移结果。
 	if startErr := repository.MarkStarted(context.Background(), operation.UserID, operation.OperationID); startErr != nil {
 		t.Fatalf("MarkStarted: %v", startErr)
 	}
