@@ -185,33 +185,35 @@ const getOrCreateSinglePublishOperationID = async (
   const digestHex = Array.from(new Uint8Array(requestDigest)).map(/* byte 表示请求指纹摘要中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
   // storageKey 按账号保存当前未收口操作，避免用户修改表单后绕过未知结果隔离。
   const storageKey = 'ydisks.single-publish.active.' + encodeURIComponent(form.cookie_id);
+  // existingRaw 保存当前账号上一次尚未清理的操作记录。
+  let existingRaw: string | null = null;
   try {
-    // existingRaw 保存当前账号上一次尚未清理的操作记录。
-    const existingRaw = window.sessionStorage.getItem(storageKey);
-    if (existingRaw) {
-      // existing 保存当前账号上一次操作 ID 及其请求指纹。
-      const existing = JSON.parse(existingRaw) as { operationID?: string; fingerprint?: string };
-      if (existing.operationID && existing.fingerprint === digestHex) return existing.operationID;
-      if (existing.operationID) {
-        // previousOperation 保存上一次发布的服务端状态，判断是否允许开始不同内容的新发布。
-        const previousOperation = await getSinglePublishOperation(existing.operationID);
-        if (!['prepared', 'local_confirmed'].includes(previousOperation.state)) {
-          throw new Error('上一条商品发布操作仍未安全收口。请恢复原表单并查询原操作状态，不要用不同内容开始新发布。');
-        }
+    existingRaw = window.sessionStorage.getItem(storageKey);
+  } catch {
+    // 浏览器不允许会话存储时，后续仅能生成本次唯一 ID，不能承诺刷新恢复。
+  }
+  if (existingRaw) {
+    // existing 保存当前账号上一次操作 ID 及其请求指纹。
+    const existing = JSON.parse(existingRaw) as { operationID?: string; fingerprint?: string };
+    if (existing.operationID && existing.fingerprint === digestHex) return existing.operationID;
+    if (existing.operationID) {
+      // previousOperation 保存上一次发布的服务端状态；查询失败时必须停止，不能降级生成新 ID。
+      const previousOperation = await getSinglePublishOperation(existing.operationID);
+      if (!['prepared', 'local_confirmed'].includes(previousOperation.state)) {
+        throw new Error('上一条商品发布操作仍未安全收口。请恢复原表单并查询原操作状态，不要用不同内容开始新发布。');
       }
     }
-    // random 保存新操作 ID 的密码学随机字节。
-    const random = crypto.getRandomValues(new Uint8Array(16));
-    // operationID 是本次发布的稳定随机标识。
-    const operationID = Array.from(random).map(/* byte 表示随机操作 ID 中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
-    window.sessionStorage.setItem(storageKey, JSON.stringify({ operationID, fingerprint: digestHex }));
-    return operationID;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('上一条商品发布操作仍未安全收口')) throw error;
-    // storage 不可用时仍生成唯一 ID；该降级不会伪称具备刷新恢复能力。
-    const random = crypto.getRandomValues(new Uint8Array(16));
-    return Array.from(random).map(/* byte 表示随机操作 ID 中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
   }
+  // random 保存新操作 ID 的密码学随机字节。
+  const random = crypto.getRandomValues(new Uint8Array(16));
+  // operationID 是本次发布的稳定随机标识。
+  const operationID = Array.from(random).map(/* byte 表示随机操作 ID 中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify({ operationID, fingerprint: digestHex }));
+  } catch {
+    // 会话存储写入失败时仍可完成本次请求，但刷新后不能恢复相同 ID。
+  }
+  return operationID;
 };
 
 // clearSinglePublishOperationID 仅在当前操作成功收口后清理会话存储中的活动操作标识。
