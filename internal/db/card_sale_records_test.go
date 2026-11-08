@@ -444,6 +444,8 @@ func TestMultiDB_CardSaleReleaseIsIdempotent(t *testing.T) {
 // claimErr、claimed 保存动作检查点领取错误及是否领取成功。
 // TestMultiDB_CardSaleReplayCompletionSettlesReserved 验证人工补发成功收口会兜底确认本运行的 reserved 台账。
 func TestMultiDB_CardSaleReplayCompletionSettlesReserved(t *testing.T) {
+	// 使用专用测试密钥，使三种数据库目标都能真实执行发货凭证加密与解密。
+	t.Setenv("XIANYU_DATA_KEY", "multidb-replay-proof-test-key")
 // proof 是用于验证补发收口的模拟发货凭证。
 	for _, target := range allTestTargets(t) {
 		t.Run(target.name, func(t *testing.T) {
@@ -513,6 +515,8 @@ func TestMultiDB_CardSaleReplayCompletionSettlesReserved(t *testing.T) {
 
 // TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold 验证旁路 MarkSaleRecordsSold 失败后，成功收口仍能在事务内兜底结算。
 func TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold(t *testing.T) {
+	// 使用专用测试密钥，确保故障注入覆盖真实的凭证加密路径。
+	t.Setenv("XIANYU_DATA_KEY", "sqlite-replay-proof-failure-test-key")
 	store, cleanup := newTestDB(t)
 	defer cleanup()
 	ctx := context.Background()
