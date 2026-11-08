@@ -26,6 +26,7 @@ func TestSinglePublishOperationsStateTransitions(t *testing.T) {
 		RequestFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		State:              "prepared",
 	}
+	// createErr 保存创建 prepared 检查点的数据库执行结果。
 	if createErr := repository.CreatePrepared(context.Background(), operation); createErr != nil {
 		t.Fatalf("CreatePrepared: %v", createErr)
 	}
@@ -34,6 +35,7 @@ func TestSinglePublishOperationsStateTransitions(t *testing.T) {
 	if duplicateErr == nil {
 		t.Fatal("duplicate operation ID unexpectedly accepted")
 	}
+	// startErr 保存 prepared -> started 状态迁移结果。
 	if startErr := repository.MarkStarted(context.Background(), operation.UserID, operation.OperationID); startErr != nil {
 		t.Fatalf("MarkStarted: %v", startErr)
 	}
@@ -42,6 +44,7 @@ func TestSinglePublishOperationsStateTransitions(t *testing.T) {
 	if !errors.Is(duplicateStartErr, ErrSinglePublishOperationChanged) {
 		t.Fatalf("second MarkStarted error=%v", duplicateStartErr)
 	}
+	// remoteErr 保存远端确认结果写入操作账本的结果。
 	if remoteErr := repository.MarkRemoteConfirmed(context.Background(), operation.UserID, operation.OperationID, "remote-item-7", "https://example.invalid/item/7", `{"item_id":"remote-item-7"}`); remoteErr != nil {
 		t.Fatalf("MarkRemoteConfirmed: %v", remoteErr)
 	}
@@ -86,6 +89,7 @@ func TestSinglePublishOperationsUnknownCannotBeStartedAgain(t *testing.T) {
 	if startErr := repository.MarkStarted(context.Background(), operation.UserID, operation.OperationID); startErr != nil {
 		t.Fatalf("MarkStarted: %v", startErr)
 	}
+	// unknownErr 保存将远端不确定结果隔离到 unknown 的迁移结果。
 	if unknownErr := repository.MarkUnknown(context.Background(), operation.UserID, operation.OperationID, "平台响应丢失，结果待人工核对"); unknownErr != nil {
 		t.Fatalf("MarkUnknown: %v", unknownErr)
 	}
