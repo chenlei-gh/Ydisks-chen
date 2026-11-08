@@ -89,6 +89,7 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 		if decodeErr != nil {
 			return PublishOutcome{}, decodeErr
 		}
+		// outcome 保存远端已确认后恢复本地写入的结果及错误状态。
 		outcome := PublishOutcome{Result: result}
 		if operation.ErrorMessage != "" {
 			outcome.ResponseCookieErr = errors.New(operation.ErrorMessage)
