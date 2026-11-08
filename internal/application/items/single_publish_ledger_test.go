@@ -37,7 +37,6 @@ func (l *ledgerTestFake) GetForUser(_ context.Context, userID int64, operationID
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	// operation、exists 保存测试仓储查到的操作快照及其存在状态。
-	// operation、exists 保存当前状态迁移对应的快照及存在状态。
 	operation, exists := l.operations[operationID]
 	if !exists || operation.UserID != userID {
 		return PublishOperation{}, errors.New("not found")
@@ -80,6 +79,7 @@ func (l *ledgerTestFake) MarkUnknown(_ context.Context, userID int64, operationI
 func (l *ledgerTestFake) transition(userID int64, operationID, from, to string, update func(*PublishOperation)) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	// operation、exists 保存当前状态迁移对应的快照及存在状态。
 	operation, exists := l.operations[operationID]
 	if !exists || operation.UserID != userID || operation.State != from {
 		return errors.New("state changed")
@@ -147,7 +147,6 @@ func TestSinglePublishLedgerUnknownNeverReplays(t *testing.T) {
 	publisher := &ledgerPublisherFake{publishErr: errors.New("connection lost")}
 	// repository 保存本地商品仓储替身。
 	repository := &ledgerRepositoryFake{}
-	// service 保存启用持久化操作账本的应用服务。
 	// service、err 保存被测应用服务及构造校验结果。
 	service, err := NewServiceWithOperationLedger(publisher, repository, ledger)
 	if err != nil {
@@ -160,7 +159,6 @@ func TestSinglePublishLedgerUnknownNeverReplays(t *testing.T) {
 	if firstErr == nil {
 		t.Fatal("first publish should report the remote error")
 	}
-	// operation 保存首次调用后的持久化状态。
 	// operation、err 保存首次调用后的持久化状态及查询结果。
 	operation, err := ledger.GetForUser(context.Background(), 7, "op-unknown")
 	if err != nil || operation.State != "unknown" {
@@ -184,7 +182,7 @@ func TestSinglePublishLedgerRecoversLocalSave(t *testing.T) {
 	publisher := &ledgerPublisherFake{result: &PublishResult{ItemID: "item-123", ItemURL: "https://example.invalid/item-123", Title: "test"}}
 	// repository 首次失败、第二次成功，用于模拟本地数据库短暂故障。
 	repository := &ledgerRepositoryFake{failures: 1}
-	// service 保存启用持久化操作账本的应用服务。
+	// service、err 保存被测应用服务及构造校验结果。
 	service, err := NewServiceWithOperationLedger(publisher, repository, ledger)
 	if err != nil {
 		t.Fatalf("NewServiceWithOperationLedger error: %v", err)
@@ -192,22 +190,22 @@ func TestSinglePublishLedgerRecoversLocalSave(t *testing.T) {
 	// input 保存本次测试使用的稳定操作标识和指纹。
 	input := PublishInput{UserID: 7, CookieID: "account-7", OperationID: "op-recover", RequestFingerprint: "fp-a", Title: "test"}
 	// first、err 保存首次发布的结果及应用服务错误。
+	// first、err 保存当前发布调用的结果及应用服务错误。
 	first, err := service.PublishSingle(context.Background(), input)
 	if err != nil || first.LocalSaveErr == nil {
 		t.Fatalf("first outcome=%+v err=%v want local save error", first, err)
 	}
-	// firstState 保存首次发布后已确认的远端状态。
 	// firstState、err 保存首次发布后远端检查点及读取错误。
 	firstState, err := ledger.GetForUser(context.Background(), 7, "op-recover")
 	if err != nil || firstState.State != "remote_confirmed" {
 		t.Fatalf("operation=%+v err=%v want remote_confirmed", firstState, err)
 	}
 	// second、err 保存恢复本地商品写入后的结果及应用服务错误。
+	// second、err 保存当前恢复调用的结果及应用服务错误。
 	second, err := service.PublishSingle(context.Background(), input)
 	if err != nil || second.LocalSaveErr != nil || second.Result == nil || second.Result.ItemID != "item-123" {
 		t.Fatalf("second outcome=%+v err=%v", second, err)
 	}
-	// finalState 保存本地收口后的操作状态。
 	// finalState、err 保存本地收口后的操作状态及读取错误。
 	finalState, err := ledger.GetForUser(context.Background(), 7, "op-recover")
 	if err != nil || finalState.State != "local_confirmed" {
