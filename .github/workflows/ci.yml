@@ -109,7 +109,10 @@ jobs:
         run: npm run typecheck --prefix frontend
 
       - name: 检查 OpenAPI 生成产物
-        run: npm run api:check --prefix frontend
+        run: |
+          npm run api:generate --prefix frontend
+          git diff -- frontend/shared/api-contract/generated/schema.ts
+          npm run api:check --prefix frontend
 
       - name: 运行前端测试
         run: npm test --prefix frontend
