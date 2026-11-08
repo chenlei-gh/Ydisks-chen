@@ -34,7 +34,7 @@
 - `63e69f30ecdd6bc939ae06a72267aaca3f796888`：库存重复/并发释放与补发台账结算回归测试。
 - 当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)，open、ready for review，未合并。
 
-**验证状态**：尝试在本地克隆仓库时，运行环境无法解析 `github.com`，因此没有本地测试结果。PR 创建后暂未观察到 GitHub Actions workflow run 或 commit status；不能声称 CI 已启动或通过。后续以 PR 实际检查结果为准。
+**验证状态**：尝试在本地克隆仓库时，运行环境无法解析 `github.com`，因此没有本地测试结果。仓库所有者已启用 Actions 权限；但此前 PR 事件没有生成 workflow run，启用设置本身没有补跑旧事件。为触发新的 `pull_request` `synchronize` 事件，本次仅更新本审计记录；后续以新提交对应的实际 workflow run 与检查结果为准。
 
 ## 2. 自动发货调用链（1.1）
 
@@ -201,5 +201,5 @@
 
 - 第一阶段审计先完成报告，再按报告进入最小修复；修复提交已在 1.1 节列明。
 - 本次 GitHub 代码读取与测试结构检查不等于运行测试；本地运行环境无法解析 `github.com`，目前没有本地 Go 测试结果。
-- PR #1（open，ready for review） 尚未出现可见 GitHub Actions workflow run 或 commit status；不得把“PR 已创建”描述为“CI 已通过”。
+- PR #1（open，ready for review）在 Actions 权限启用后，仍需由新的 PR 更新事件触发 CI；截至本报告更新前，原 head 尚无可见 workflow run 或 commit status。不得把“PR 已创建”描述为“CI 已通过”。
 - 本轮不在真实买家、真实订单或真实账号上执行发货/补发。
