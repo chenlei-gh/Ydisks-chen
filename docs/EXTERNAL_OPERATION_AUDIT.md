@@ -119,3 +119,33 @@ lease/token/attempt 只负责本地写入 fencing；不得将其描述成远端 
 
 商品主图和规格图在最终 `idleitem.publish` 请求前分别上传到图片服务。上传成功只证明图片资源已上传，不证明商品已创建或对买家可见。若后续类目准备、节流闸门或最终发布失败，可能留下孤立图片资源；当前代码没有看到对应的远端删除/清理契约。该问题应按资源清理/保留策略单独评估，不能把图片上传标记为“商品发布成功”。
 
+
+
+## 9. 单商品发布持久化方案边界（实现前设计核查）
+
+代码中已经存在一个适合精确落检查点的扩展点：
+
+- `internal/xianyu/mtop/publish.go` 的 `PublishItemRequest.BeforePublish` 在主图/规格图上传和类目准备完成后、最终 `mtop.idle.pc.idleitem.publish` 请求发出前调用。
+- 批量发布已经使用该 hook，在回调内原子预留时隙；单商品 `ItemPublishPort.publish` 当前没有传入该 hook。
+- 因此单商品不应在开始上传图片前就把操作标记成远端创建 `started`。更准确的顺序是先持久化操作意图 `prepared`，再由 `BeforePublish` 持久化 `started`，之后才允许最终创建请求发出。图片上传阶段失败可安全重做商品创建流程（但可能遗留上传图片资源）；`started` 后进程中断或传输结果不明必须进入 `unknown/needs_review`。
+
+建议最小商品域操作记录包含：
+
+- 稳定的客户端 operation ID（HTTP 请求携带；不能由服务端每次重试重新生成）。
+- `user_id`、`cookie_id`、规范化请求 fingerprint；同一 ID 携带不同 fingerprint 必须冲突拒绝。
+- 状态：`prepared`、`started`、`remote_confirmed`、`local_confirmed`、`unknown`、明确拒绝的 `failed`。
+- 远端确认后的 `item_id`、`item_url`、受控 `raw_json` 和非敏感错误分类。
+- 不保存图片字节；fingerprint 计算时纳入图片内容摘要与规格图片摘要，避免同一 key 被不同图片负载复用。
+
+推荐执行顺序：
+
+1. 前端在一次发布意图开始时生成 operation ID，并在请求超时/结果未知时保留该 ID；明确开始另一条新商品发布时才生成新 ID。
+2. 服务端鉴权并校验输入后，原子创建或读取 operation 记录；重复 ID + 相同 fingerprint 返回已有状态，重复 ID + 不同 fingerprint 返回冲突。
+3. `PublishItemRequest.BeforePublish` 回调条件更新 `prepared -> started`。若写入失败，不发出最终创建请求。
+4. MTOP 返回含 ItemID 的成功结果后，适配器立即写入 `remote_confirmed` 检查点，必须早于 Cookie 会话写回和本地商品目录 Upsert。
+5. 后续 Cookie / 本地商品 Upsert 成功后标记 `local_confirmed`；后处理失败时保留 `remote_confirmed`，同 key 重试只做本地后处理，不再次调用 MTOP 创建。
+6. `started` 后网络错误、进程硬中断、成功响应缺少 ItemID、远端成功但 ItemID 检查点写入失败，一律进入 `unknown` 或保持可判定为未知的 `started`；同 key 重试只能返回人工核对状态，不能再次发布。
+
+关键设计约束：operation ID 只能防止同一用户端重试同一个操作被重复执行；它不会让闲鱼服务端去重，也无法阻止用户错误地为同一商品创建一个全新的 operation ID。界面必须让未知操作持续可见，不能用“重新发布”按钮静默生成新 ID。由于商品创建 API 的服务端幂等契约未证实，本方案不承诺 exactly-once，也不提供未知结果自动回查/自动重发。
+
+该设计涉及三方言 migration、数据库原子状态转换、前端 operation ID 生命周期、OpenAPI/客户端契约和故障注入测试。应作为一个完整商品域实施批次，不先引入全局 ExternalOperationService。
