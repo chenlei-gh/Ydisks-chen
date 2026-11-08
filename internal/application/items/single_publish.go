@@ -268,6 +268,7 @@ func NewService(publisher PublishPort, repository ItemRepository) (*Service, err
 
 // NewServiceWithOperationLedger 创建启用持久化操作账本的单商品发布服务。
 func NewServiceWithOperationLedger(publisher PublishPort, repository ItemRepository, operations PublishOperationLedger) (*Service, error) {
+	// service、err 保存基础服务实例及端口校验结果。
 	service, err := NewService(publisher, repository)
 	if err != nil {
 		return nil, err
