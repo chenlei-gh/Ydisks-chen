@@ -35,6 +35,7 @@ jobs:
           if [ -n "$(gofmt -l .)" ]; then
             echo "发现未格式化的 Go 文件，请先运行 gofmt -w。" >&2
             gofmt -l .
+            gofmt -d $(gofmt -l .) || true
             exit 1
           fi
 
