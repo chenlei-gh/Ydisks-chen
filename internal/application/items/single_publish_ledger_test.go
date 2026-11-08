@@ -43,14 +43,21 @@ func (l *ledgerTestFake) MarkStarted(_ context.Context, userID int64, operationI
 	return l.transition(userID, operationID, "prepared", "started", nil)
 }
 
-func (l *ledgerTestFake) MarkRemoteConfirmed(_ context.Context, userID int64, operationID, itemID, itemURL, rawJSON string) error {
+func (l *ledgerTestFake) MarkRemoteConfirmed(_ context.Context, userID int64, operationID, itemID, itemURL, rawJSON string, message ...string) error {
 	return l.transition(userID, operationID, "started", "remote_confirmed", func(operation *PublishOperation) {
 		operation.ItemID, operation.ItemURL, operation.RawJSON = itemID, itemURL, rawJSON
+		if len(message) > 0 {
+			operation.ErrorMessage = message[0]
+		}
 	})
 }
 
-func (l *ledgerTestFake) MarkLocalConfirmed(_ context.Context, userID int64, operationID string) error {
-	return l.transition(userID, operationID, "remote_confirmed", "local_confirmed", nil)
+func (l *ledgerTestFake) MarkLocalConfirmed(_ context.Context, userID int64, operationID string, message ...string) error {
+	return l.transition(userID, operationID, "remote_confirmed", "local_confirmed", func(operation *PublishOperation) {
+		if len(message) > 0 {
+			operation.ErrorMessage = message[0]
+		}
+	})
 }
 
 func (l *ledgerTestFake) MarkUnknown(_ context.Context, userID int64, operationID, message string) error {
