@@ -209,6 +209,9 @@ func TestMigrate_ExistingAutomationRunsReceiveEmptyDeliveryProof(t *testing.T) {
 	if !tableExists(t, rawDB, "order_automation_guards") {
 		t.Fatal("升级后必须创建不会随规则删除的订单执行守卫表")
 	}
+	if !tableExists(t, rawDB, "single_publish_operations") {
+		t.Fatal("单商品发布操作账本表缺失")
+	}
 	assertOwnershipLookupIndexes(t, rawDB, DialectSQLite, true)
 }
 
