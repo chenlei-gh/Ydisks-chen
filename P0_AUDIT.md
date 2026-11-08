@@ -203,3 +203,12 @@
 - 本次 GitHub 代码读取与测试结构检查不等于运行测试；本地运行环境无法解析 `github.com`，目前没有本地 Go 测试结果。
 - PR #1（open，ready for review）已确认仓库所有者保存 Actions permissions，且保存后新 head `1b14e4f` 仍无可见 workflow run/status；需检查 Actions 页面提示及上级策略。不得把“PR 已创建”描述为“CI 已通过”。
 - 本轮不在真实买家、真实订单或真实账号上执行发货/补发。
+
+
+## 12. 2026-11-08 云端验证追加记录
+
+- commit `af7bdf2` 的云端 Go 验证：`go vet ./...` 通过；`golangci-lint ./...` 通过（0 issues）；中文注释、架构命令、OpenAPI 和 docs 一致性步骤通过。
+- `go test ./...` 实际运行，除 `tools/architecturecheck` 中 `TestStageTwoRealSourceGate` 因 `internal/notify/notifier.go` 808 行超过 800 行门槛而失败外，其余列出的 Go 包均通过。该失败不是业务测试失败，而是测试代码自身执行的真实源码架构门禁；race 步骤因此被跳过。
+- 已把 `levelLabel`、`eventLabel`、`classifyAccountAlertEvent`、`statusOutcome`、`messageOutcome`、`formatEvent`、`eventAllowed`、`eventAllowedWithFallbacks`、`isAutomationEventType`、`parseEventTypes`、`sortStrings` 从 `notifier.go` 拆至 `notifier_events.go`。主文件从 808 行减至 552 行；新文件 262 行。`encoding/json` 随 JSON 解析逻辑迁移，`strings` 保留在主文件并在新文件独立导入。
+- 新文件中文注释门禁最初报告 `levelLabel` 缺少注释，已补充说明性中文注释。拆分后的完整 Go 测试、race 测试、多方言矩阵及 PR 最新 head 状态尚待再次执行/确认。
+- 不得将上述首轮结果描述为 P0 已验收或平台真实交易验证；无闲鱼真实订单发货/补发测试。
