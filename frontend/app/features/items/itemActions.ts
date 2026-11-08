@@ -147,6 +147,61 @@ export interface ItemActionsState {
   locateForPublish: (batch: boolean) => Promise<void>;
 }
 
+
+// getOrCreateSinglePublishOperationID 在会话存储中按账号和完整表单内容复用发布操作 ID。
+const getOrCreateSinglePublishOperationID = async (
+  form: PublishItemForm,
+  location: PublishLocation | null,
+  category: PublishCategory | null,
+): Promise<string> => {
+  // imageEntries 保存商品图片和规格图片及其用途标识。
+  const imageEntries = [
+    ...form.images.map(file => ({ role: 'item', file })),
+    ...form.specs.flatMap(spec => spec.values.flatMap(value => value.image ? [{ role: spec.specId + ':' + value.valueId, file: value.image }] : [])),
+  ];
+  // imageDigests 保存图片字节摘要，避免仅按文件名复用操作 ID。
+  const imageDigests: string[] = [];
+  for (const entry of imageEntries) {
+    // digest 是当前图片文件内容的 SHA-256。
+    const digest = await crypto.subtle.digest('SHA-256', await entry.file.arrayBuffer());
+    // digestHex 保存可参与规范化请求键的十六进制摘要。
+    const digestHex = Array.from(new Uint8Array(digest)).map(value => value.toString(16).padStart(2, '0')).join('');
+    imageDigests.push(entry.role + '|' + entry.file.name + '|' + entry.file.type + '|' + digestHex);
+  }
+  // canonical 保存不包含图片二进制的规范化表单字段和图片摘要。
+  const canonical = JSON.stringify({
+    cookie_id: form.cookie_id, title: form.title, description: form.description,
+    price: form.price, original_price: form.original_price, quantity: form.quantity,
+    postage_mode: form.postage_mode, postage: form.postage,
+    specs: form.specs.map(spec => ({
+      specId: spec.specId, name: spec.name, supportImage: spec.supportImage,
+      values: spec.values.map(value => ({ valueId: value.valueId, value: value.value })),
+    })),
+    skuRows: form.skuRows, location, category, imageDigests,
+  });
+  // requestDigest 是当前完整表单的 SHA-256，用于隔离不同内容的发布操作。
+  const requestDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+  // digestHex 是会话存储键使用的十六进制指纹。
+  const digestHex = Array.from(new Uint8Array(requestDigest)).map(value => value.toString(16).padStart(2, '0')).join('');
+  // storageKey 按账号和请求指纹隔离，浏览器刷新后仍可恢复同一操作 ID。
+  const storageKey = 'ydisks.single-publish.' + encodeURIComponent(form.cookie_id) + '.' + digestHex;
+  try {
+    // existingID 保存相同表单之前生成的操作 ID。
+    const existingID = window.sessionStorage.getItem(storageKey);
+    if (existingID) return existingID;
+    // random 保存新操作 ID 的密码学随机字节。
+    const random = crypto.getRandomValues(new Uint8Array(16));
+    // operationID 是本次发布的稳定随机标识。
+    const operationID = Array.from(random).map(value => value.toString(16).padStart(2, '0')).join('');
+    window.sessionStorage.setItem(storageKey, operationID);
+    return operationID;
+  } catch {
+    // storage 不可用时仍生成唯一 ID；该降级不会伪称具备刷新恢复能力。
+    const random = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(random).map(value => value.toString(16).padStart(2, '0')).join('');
+  }
+};
+
 // emptyAddItemForm 创建手动添加商品表单的初始值。
 export const emptyAddItemForm = (): AddItemForm => ({ cookie_id: '', item_id: '', item_title: '', item_price: '', item_image: '' });
 
@@ -337,8 +392,10 @@ export const useItemActions = ({ selectedAccount, setSelectedAccount, setItems, 
     try {
       // result 保存平台发布接口返回的商品信息。
       const totalQuantity = publishForm.specs.length > 0 ? publishForm.skuRows.reduce(/* total、row 汇总各 SKU 的库存。 */ (total, row) => total + (Number(row.quantity) || 0), 0) : Number(publishForm.quantity);
+      // operationID 保存当前表单在刷新和网络重试时复用的操作标识。
+      const operationID = await getOrCreateSinglePublishOperationID(publishForm, publishLocation, publishCategory);
       // result 保存平台发布接口返回的商品信息。
-      const result = await publishItem({ ...publishForm, quantity: totalQuantity, location: publishLocation || undefined, category: publishCategory || undefined });
+      const result = await publishItem({ ...publishForm, operation_id: operationID, quantity: totalQuantity, location: publishLocation || undefined, category: publishCategory || undefined });
       await loadItems();
       setShowPublishModal(false);
       setPublishForm(emptyPublishItemForm(selectedAccount || ''));
