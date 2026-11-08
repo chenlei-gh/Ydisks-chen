@@ -38,20 +38,20 @@ func fingerprintSinglePublishRequest(input itemapp.PublishInput) (string, error)
 	}
 	// canonical 保存会影响远端商品创建结果的规范化请求字段。
 	canonical := struct {
-		CookieID string
-		Title string
-		Description string
-		PriceCents int64
+		CookieID           string
+		Title              string
+		Description        string
+		PriceCents         int64
 		OriginalPriceCents int64
-		Quantity int
-		PostageMode string
-		PostageCents int64
-		Location *itemapp.Location
-		Category *itemapp.PublishCategory
-		Images []string
-		Specs []itemapp.PublishSpec
-		SKUs []itemapp.PublishSKU
-		SpecImages []string
+		Quantity           int
+		PostageMode        string
+		PostageCents       int64
+		Location           *itemapp.Location
+		Category           *itemapp.PublishCategory
+		Images             []string
+		Specs              []itemapp.PublishSpec
+		SKUs               []itemapp.PublishSKU
+		SpecImages         []string
 	}{
 		CookieID: input.CookieID, Title: input.Title, Description: input.Description,
 		PriceCents: input.PriceCents, OriginalPriceCents: input.OriginalPriceCents,
