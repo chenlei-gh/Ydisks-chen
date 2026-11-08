@@ -442,7 +442,7 @@ func TestLatestMigrationsDownUpSQLite(t *testing.T) {
 	}
 	// finalVersion、versionErr 验证完整回滚后重新升级仍到达最新迁移 00060（单商品发布操作账本）。
 	finalVersion, versionErr := goose.GetDBVersion(d)
-	if versionErr != nil || finalVersion != 59 {
+	if versionErr != nil || finalVersion != 60 {
 		t.Fatalf("final migration version=%d err=%v", finalVersion, versionErr)
 	}
 	// val 用于本次流程后续判断的val
