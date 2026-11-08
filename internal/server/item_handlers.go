@@ -170,33 +170,7 @@ func (s *Server) publishItem(w http.ResponseWriter, r *http.Request) {
 	// res 用于本次流程后续判断的响应
 	res := outcome.Result
 	if callErr != nil {
-		// perr 用于本次流程后续判断的perr
-		var perr *itemapp.PublishError
-		if errors.As(callErr, &perr) {
-			// status 用于本次流程后续判断的状态
-			status := http.StatusBadGateway
-			// msg 用于本次流程后续判断的msg
-			msg := perr.Error()
-			if perr.Code == itemapp.PublishErrorStockPermissionMissing {
-				status = http.StatusForbidden
-				msg = "该账号没有库存发布权限，无法按库存数量发布商品"
-			}
-			writeErrCode(w, status, string(perr.Code), msg, "")
-			return
-		}
-		if strings.Contains(callErr.Error(), "账号凭证已变化") {
-			writeErr(w, http.StatusConflict, callErr.Error())
-			return
-		}
-		// message 保存未被专用错误类型包装的平台或基础设施失败原因，确保前端不会收到误导性的成功结果缺失提示。
-		message := strings.TrimSpace(callErr.Error())
-		if message == "" {
-			message = "商品发布失败"
-		}
-		if s.Logger != nil {
-			s.Logger.Error("商品发布失败", "cookie_id", cookieID, "err", callErr)
-		}
-		writeErrCode(w, http.StatusBadGateway, "publish_failed", message, "")
+		s.writeSinglePublishCallError(w, cookieID, callErr)
 		return
 	}
 	if res == nil || strings.TrimSpace(res.ItemID) == "" {
