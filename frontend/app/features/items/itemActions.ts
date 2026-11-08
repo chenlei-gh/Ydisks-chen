@@ -149,6 +149,36 @@ export interface ItemActionsState {
 
 
 // getOrCreateSinglePublishOperationID 在会话存储中按账号和完整表单内容复用发布操作 ID。
+// readPublishFileBytes 读取浏览器 File 内容，兼容缺少 Blob.arrayBuffer 的测试与旧浏览器环境。
+const readPublishFileBytes = async (file: File): Promise<Uint8Array> => {
+  if (typeof file.arrayBuffer === 'function') {
+    return new Uint8Array(await file.arrayBuffer());
+  }
+  return new Promise((resolve, reject) => {
+    // reader 是当前图片的兼容读取器。
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(new Uint8Array(reader.result));
+      else reject(new Error('无法读取商品图片内容'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('读取商品图片失败'));
+    reader.readAsArrayBuffer(file);
+  });
+};
+
+// stablePublishHash 生成仅用于浏览器会话键的稳定短指纹；服务端仍以 SHA-256 重新校验真实请求。
+const stablePublishHash = (bytes: Uint8Array): string => {
+  // hashA、hashB 是两组独立的 32 位非密码学哈希状态。
+  let hashA = 2166136261;
+  let hashB = 5381;
+  // byte 是当前输入中的单个字节。
+  for (const byte of bytes) {
+    hashA = Math.imul(hashA ^ byte, 16777619);
+    hashB = Math.imul(hashB, 33) ^ byte;
+  }
+  return (hashA >>> 0).toString(16).padStart(8, '0') + (hashB >>> 0).toString(16).padStart(8, '0');
+};
+
 const getOrCreateSinglePublishOperationID = async (
   form: PublishItemForm,
   location: PublishLocation | null,
@@ -162,10 +192,10 @@ const getOrCreateSinglePublishOperationID = async (
   // imageDigests 保存图片字节摘要，避免仅按文件名复用操作 ID。
   const imageDigests: string[] = [];
   for (const /* entry 表示当前参与指纹计算的图片及其用途。 */ entry of imageEntries) {
-    // digest 是当前图片文件内容的 SHA-256。
-    const digest = await crypto.subtle.digest('SHA-256', await entry.file.arrayBuffer());
-    // digestHex 保存可参与规范化请求键的十六进制摘要。
-    const digestHex = Array.from(new Uint8Array(digest)).map(/* byte 表示摘要中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
+    // imageBytes 保存当前图片的字节内容。
+    const imageBytes = await readPublishFileBytes(entry.file);
+    // digestHex 保存浏览器会话键使用的稳定图片摘要。
+    const digestHex = stablePublishHash(imageBytes);
     imageDigests.push(entry.role + '|' + entry.file.name + '|' + entry.file.type + '|' + digestHex);
   }
   // canonical 保存不包含图片二进制的规范化表单字段和图片摘要。
@@ -179,10 +209,8 @@ const getOrCreateSinglePublishOperationID = async (
     })),
     skuRows: form.skuRows, location, category, imageDigests,
   });
-  // requestDigest 是当前完整表单的 SHA-256，用于隔离不同内容的发布操作。
-  const requestDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
-  // digestHex 是当前完整表单的十六进制指纹。
-  const digestHex = Array.from(new Uint8Array(requestDigest)).map(/* byte 表示请求指纹摘要中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
+  // digestHex 是当前完整表单的稳定短指纹，仅用于本地查找；服务端会独立计算 SHA-256。
+  const digestHex = stablePublishHash(new TextEncoder().encode(canonical));
   // storageKey 按账号保存当前未收口操作，避免用户修改表单后绕过未知结果隔离。
   const storageKey = 'ydisks.single-publish.active.' + encodeURIComponent(form.cookie_id);
   // existingRaw 保存当前账号上一次尚未清理的操作记录。
