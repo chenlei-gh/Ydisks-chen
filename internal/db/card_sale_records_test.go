@@ -378,7 +378,7 @@ func TestCards_ReleaseBatchDataIsIdempotent(t *testing.T) {
 	if err := store.Cards.ReleaseBatchData(ctx, cardID, recordID, content); err != nil {
 		t.Fatalf("重复释放应安全 no-op: %v", err)
 	}
-	if got := stockOf(t, store, cardID); got != "k1\\nk2\\nk3" {
+	if got := stockOf(t, store, cardID); got != "k1\nk2\nk3" {
 		t.Fatalf("重复释放不得重复增加库存, got %q", got)
 	}
 }
@@ -413,7 +413,7 @@ func TestMultiDB_CardSaleReleaseIsIdempotent(t *testing.T) {
 					}
 				}
 			}
-			if got := stockOf(t, target.store, cardID); got != "k1\\nk2\\nk3" {
+			if got := stockOf(t, target.store, cardID); got != "k1\nk2\nk3" {
 				t.Fatalf("并发重复释放导致库存虚增: %q", got)
 			}
 		})
