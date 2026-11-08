@@ -93,3 +93,29 @@ lease/token/attempt 只负责本地写入 fencing；不得将其描述成远端 
 ## 7. 验证边界
 
 本报告基于指定 commit 的源码静态审计及测试源码审阅。本轮没有运行新的测试命令，没有真实闲鱼账号/订单 E2E 结果。现有 main 上 PR #1 的历史 CI 结果仅能证明该 CI head 的自动化测试通过，不自动覆盖本报告基线后的新改动。
+
+
+## 8. MTOP 发布身份与批量 post_publish 复核（2026-11-08）
+
+### 8.1 单商品 MTOP 没有可依赖的请求幂等身份
+
+- `internal/xianyu/mtop/publish.go` 的 `PublishItemRequest` 没有调用方提供的 operation/request ID。
+- `publishItemOnce` 在每次最终发布请求中自行生成 `uniqueCode = strconv.FormatInt(time.Now().UnixMicro(), 10)`。它是每次调用重新生成的时间值，不是由业务操作稳定持有的身份；重试时会变化，不能据此证明服务端会去重。
+- 当前仓库没有发现将该 `uniqueCode` 作为幂等键的契约、回查接口或“按请求身份查询发布结果”的实现。MTOP 发布成功响应主要通过 `data.itemId` 取回远端商品 ID。
+- 仓库已有 `FetchItemsPage`（`mtop.idle.web.xyh.item.list`）读取卖家商品列表，但它不是按客户端请求身份查询。仅凭标题/时间/图片等字段做相似匹配存在误匹配与漏匹配风险，不能作为自动重发或自动认定成功的依据。
+- 外部开源协议笔记将 `uniqueCode` 描述为来源不明的 opaque tracking value，而非已证实幂等键；这只能作为旁证，最终仍以本仓库代码和真实平台契约证据为准。
+
+**结论**：当前证据不支持依赖 MTOP 幂等键或 request-ID 查询。单商品未知结果必须持久化为 `unknown/needs_review`，禁止自动再次调用发布接口。后续若要改变此结论，必须取得可复现的平台契约证据与重复请求实验结果；真实账号实验仍需单独授权。
+
+### 8.2 批量 post_publish 路径已有明确的防重复创建实现与测试
+
+- `internal/adapter/item_batch_publish.go` 的 `PublishRemoteRow` 在进入图片读取、类目准备和远端发布前，先检查行内 `ItemID`；存在时直接由已保存行构造结果返回，不调用 MTOP 创建接口。
+- `internal/adapter/item_batch_publish_test.go` 的 `TestItemBatchPublishPortPersistsRemoteCheckpoint` 验证远端 ItemID 检查点可恢复，并断言恢复调用后平台发布调用次数仍为 1。
+- `internal/db/item_publish_batches_worker.go` 的租约接管逻辑将 `remote_started` 且无 ItemID 的旧行隔离为 `uncertain_remote`；已有 ItemID 的行则可进入后续处理。该测试覆盖已保存 ItemID 后的端口恢复，但仍应补充 worker 层 post_publish 行接管/最终收口的集成测试，验证状态迁移全链路。
+
+**结论**：批量发布不是缺少 post_publish 防重机制；当前缺的是 worker 层恢复状态迁移的更完整验证，不应重复实现已有 checkpoint 逻辑。
+
+### 8.3 图片上传的副作用边界
+
+商品主图和规格图在最终 `idleitem.publish` 请求前分别上传到图片服务。上传成功只证明图片资源已上传，不证明商品已创建或对买家可见。若后续类目准备、节流闸门或最终发布失败，可能留下孤立图片资源；当前代码没有看到对应的远端删除/清理契约。该问题应按资源清理/保留策略单独评估，不能把图片上传标记为“商品发布成功”。
+
