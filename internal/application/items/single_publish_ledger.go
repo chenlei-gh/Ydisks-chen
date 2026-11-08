@@ -77,7 +77,7 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 			return PublishOutcome{}, decodeErr
 		}
 		// outcome 保存已完成发布结果及需要继续提示的 Cookie 错误。
-		// outcome 保存远端结果及恢复本地写入后的错误状态。
+		// outcome 保存远端已确认后恢复本地写入的结果及错误状态。
 		outcome := PublishOutcome{Result: result}
 		if operation.ErrorMessage != "" {
 			outcome.ResponseCookieErr = errors.New(operation.ErrorMessage)
@@ -171,6 +171,7 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 	if outcome.LocalSaveErr != nil {
 		return outcome, nil
 	}
+	// err 保存本地商品写入完成后的账本收口结果。
 	if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID, cookieWarning); err != nil {
 		return outcome, fmt.Errorf("本地商品已保存，但操作账本收口失败: %w", err)
 	}
