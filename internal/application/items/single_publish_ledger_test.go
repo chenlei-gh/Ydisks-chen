@@ -226,7 +226,6 @@ func TestSinglePublishLedgerRejectsFingerprintReuse(t *testing.T) {
 	}
 }
 
-
 // TestSinglePublishLedgerPreservesCookieWarning 验证发布成功后的 Cookie 写回问题在操作恢复后仍会提示。
 func TestSinglePublishLedgerPreservesCookieWarning(t *testing.T) {
 	// ledger 保存持久化操作测试替身。
