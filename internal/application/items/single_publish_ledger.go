@@ -76,6 +76,8 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 		if decodeErr != nil {
 			return PublishOutcome{}, decodeErr
 		}
+		// outcome 保存已完成发布结果及需要继续提示的 Cookie 错误。
+		// outcome 保存远端结果及恢复本地写入后的错误状态。
 		outcome := PublishOutcome{Result: result}
 		if operation.ErrorMessage != "" {
 			outcome.ResponseCookieErr = errors.New(operation.ErrorMessage)
@@ -95,7 +97,9 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 		if outcome.LocalSaveErr != nil {
 			return outcome, nil
 		}
-		if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID, operation.ErrorMessage); err != nil {
+		// err 保存本地收口状态写入结果。
+		// err 保存本地商品写入完成后的账本收口结果。
+	if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID, operation.ErrorMessage); err != nil {
 			return outcome, fmt.Errorf("本地商品已保存，但操作账本收口失败: %w", err)
 		}
 		return outcome, nil
@@ -111,10 +115,12 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 	// publishInput 将持久化闸门与既有平台回调串联，确保账本先于最终创建请求提交。
 	publishInput := input
 	publishInput.BeforePublish = func(hookCtx context.Context) error {
+		// err 保存持久化发布闸门推进结果。
 		if err := svc.operations.MarkStarted(hookCtx, input.UserID, input.OperationID); err != nil {
 			return err
 		}
 		if input.BeforePublish != nil {
+			// err 保存原有平台创建请求前置校验结果。
 			if err := input.BeforePublish(hookCtx); err != nil {
 				// MarkStarted 已成功但下游闸门拒绝；回滚 started 不安全，转为 unknown 隔离。
 				_ = svc.operations.MarkUnknown(hookCtx, input.UserID, input.OperationID, err.Error())
@@ -158,6 +164,7 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 	if outcome.ResponseCookieErr != nil {
 		cookieWarning = outcome.ResponseCookieErr.Error()
 	}
+	// remoteErr 保存平台成功结果检查点写入失败原因。
 	if remoteErr := svc.operations.MarkRemoteConfirmed(ctx, input.UserID, input.OperationID, outcome.Result.ItemID, outcome.Result.ItemURL, string(resultJSON), cookieWarning); remoteErr != nil {
 		return outcome, fmt.Errorf("平台已返回商品 ID %s，但持久化远端结果失败，禁止重发: %w", outcome.Result.ItemID, remoteErr)
 	}
@@ -175,6 +182,7 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 func decodePublishOperationResult(operation PublishOperation) (*PublishResult, error) {
 	// result 保存从检查点恢复的应用层商品结果。
 	var result PublishResult
+	// err 保存远端检查点 JSON 反序列化错误。
 	if err := json.Unmarshal([]byte(operation.RawJSON), &result); err != nil {
 		return nil, fmt.Errorf("解析已确认的商品发布结果失败: %w", err)
 	}
