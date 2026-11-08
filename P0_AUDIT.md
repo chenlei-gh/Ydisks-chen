@@ -3,7 +3,7 @@
 > 审计日期：2026-11-08  
 > 审计分支：`ydisks-enhanced/p0-delivery-safety`  
 > 代码基线：`081e7f56b5a50c8e98db5309042f0fa5bd8119b7`（与上游 `Christ9038/Ydisks-Xianyu-Helper:main` 当前一致）  
-> 本报告是静态代码与现有测试证据审计，不表示本次已运行测试，也不表示闲鱼平台 E2E 已通过。
+> 本报告包含静态代码审计及 2026-11-08 GitHub CI 运行证据；CI 通过不代表闲鱼平台真实账号/订单 E2E 已通过。
 
 ## 1. 审计结论
 
@@ -21,12 +21,12 @@
 
 ## 1.1 审计后修复进度（2026-11-08）
 
-以下是审计后在本分支已提交的最小修复；它们尚未经过本地或 CI 测试运行，不应标记为已验证通过。
+以下是审计后在本分支已提交的最小修复。最新提交对应的 GitHub CI 已运行并全部通过；各项测试证据见本报告第 12 节。
 
 | 原审计项 | 分支修复 | 回归测试 | 状态 |
 |---|---|---|---|
-| P0 `ReleaseBatchData` 重复释放 | `internal/db/card_sale_records.go`：先在同一事务中条件删除对应卡组的 reserved 台账；已不存在则 no-op；状态/卡组不匹配则报错；库存 CAS 冲突时事务回滚，删除与库存恢复一起重试。 | `TestCards_ReleaseBatchDataIsIdempotent`、`TestMultiDB_CardSaleReleaseIsIdempotent` | 已提交，待执行 |
-| P1 人工补发成功收口未结算台账 | `CompleteDeliveryReplay` 改为事务收口，并复用 `finishRunTail`，成功状态与 reserved → sold 结算原子提交。 | `TestMultiDB_CardSaleReplayCompletionSettlesReserved` | 已提交，待执行 |
+| P0 `ReleaseBatchData` 重复释放 | `internal/db/card_sale_records.go`：先在同一事务中条件删除对应卡组的 reserved 台账；已不存在则 no-op；状态/卡组不匹配则报错；库存 CAS 冲突时事务回滚，删除与库存恢复一起重试。 | `TestCards_ReleaseBatchDataIsIdempotent`、`TestMultiDB_CardSaleReleaseIsIdempotent` | 已提交，CI 已通过 |
+| P1 人工补发成功收口未结算台账 | `CompleteDeliveryReplay` 改为事务收口，并复用 `finishRunTail`，成功状态与 reserved → sold 结算原子提交。 | `TestMultiDB_CardSaleReplayCompletionSettlesReserved` | 已提交，CI 已通过 |
 
 相关提交：
 - `b4c93a70e1dd1995470a207526278037c19cd5d5`：库存释放幂等修复。
@@ -34,7 +34,7 @@
 - `63e69f30ecdd6bc939ae06a72267aaca3f796888`：库存重复/并发释放与补发台账结算回归测试。
 - 当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)，open、ready for review，未合并。
 
-**验证状态**：尝试在本地克隆仓库时，运行环境无法解析 `github.com`，因此没有本地测试结果。仓库所有者已在 `Actions permissions` 中选择 `Allow all actions and reusable workflows` 并点击 Save。此前提交（`be13da760d528a7a47e82388be3463fa7f893e71`）发生在设置保存确认之前，因此不能视为保存后的触发验证。保存后已推送文档提交 `1b14e4fd2c257b4a2bed24d9f5bcdaa26ac2d1be`，但该 head 仍未出现 workflow run 或 commit status。说明问题不是单纯的设置未保存；需要在仓库 Actions 页面确认是否有 Enable/approval 提示，并检查账户/组织策略是否覆盖仓库设置。
+**验证状态**：本轮未获得本地克隆环境，因此不报告本地测试结果。GitHub Actions 最新 PR run `42479315981` 已在仓库所有者批准后执行，head 为 `9e43bbd8e9b14f160dea394cde8f8d0e8adae8ca`，结论 `success`；完整步骤和矩阵结果见第 12 节。
 
 ## 2. 自动发货调用链（1.1）
 
@@ -183,10 +183,10 @@
 - CI 还执行 `go test ./...`、server race 子集和真实服务二进制 + 临时 SQLite smoke。
 
 **覆盖缺口**：
-- 重复/并发调用 `ReleaseBatchData` 的测试已新增，但尚未运行。
-- 已新增 SQLite 故障注入测试，验证 `MarkSaleRecordsSold` 失败后由 `CompleteDeliveryReplay` 兜底结算；尚未运行，且该故障注入仅覆盖 SQLite。
-- 自动/人工不同 trigger key 的真正同时竞争测试已新增，但尚无执行结果；需等待 CI 运行确认。
-- 本次未运行 Go 测试，也没有本开发分支的 CI 结果；测试文件存在不代表通过。
+- 重复/并发调用 `ReleaseBatchData` 的测试已由 SQLite/MySQL/PostgreSQL CI 回归通过。
+- SQLite 故障注入测试已通过，验证 `MarkSaleRecordsSold` 失败后由 `CompleteDeliveryReplay` 兜底结算；该故障注入本身仅覆盖 SQLite。
+- 自动/人工不同 trigger key 的真正同时竞争测试已由 SQLite/MySQL/PostgreSQL CI 回归通过。
+- 最新 CI 已执行完整 Go 测试及 server 并发 smoke race，均通过。
 - 没有闲鱼真实账号/订单的平台 E2E 证据。
 
 ## 10. 最小修复顺序建议
@@ -200,8 +200,8 @@
 ## 11. 本次执行边界
 
 - 第一阶段审计先完成报告，再按报告进入最小修复；修复提交已在 1.1 节列明。
-- 本次 GitHub 代码读取与测试结构检查不等于运行测试；本地运行环境无法解析 `github.com`，目前没有本地 Go 测试结果。
-- PR #1（open，ready for review）已确认仓库所有者保存 Actions permissions，且保存后新 head `1b14e4f` 仍无可见 workflow run/status；需检查 Actions 页面提示及上级策略。不得把“PR 已创建”描述为“CI 已通过”。
+- GitHub Actions 已在最新 PR head 上完成全矩阵验证；具体 run 和步骤见第 12 节。
+- PR #1 保持 open、未合并；`main` 未修改。
 - 本轮不在真实买家、真实订单或真实账号上执行发货/补发。
 
 
@@ -212,3 +212,16 @@
 - 已把 `levelLabel`、`eventLabel`、`classifyAccountAlertEvent`、`statusOutcome`、`messageOutcome`、`formatEvent`、`eventAllowed`、`eventAllowedWithFallbacks`、`isAutomationEventType`、`parseEventTypes`、`sortStrings` 从 `notifier.go` 拆至 `notifier_events.go`。主文件从 808 行减至 552 行；新文件 262 行。`encoding/json` 随 JSON 解析逻辑迁移，`strings` 保留在主文件并在新文件独立导入。
 - 新文件中文注释门禁最初报告 `levelLabel` 缺少注释，已补充说明性中文注释。拆分后的完整 Go 测试、race 测试、多方言矩阵及 PR 最新 head 状态尚待再次执行/确认。
 - 不得将上述首轮结果描述为 P0 已验收或平台真实交易验证；无闲鱼真实订单发货/补发测试。
+
+
+## 13. 最新提交最终 CI 验证（2026-11-08）
+
+- GitHub Actions run：[`42479315981`](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42479315981)，head SHA `9e43bbd8e9b14f160dea394cde8f8d0e8adae8ca`，最终结论 `completed / success`。
+- 四个 job 全部通过：
+  - 冒烟测试：真实服务二进制 + 临时 SQLite。
+  - MySQL/PostgreSQL 多数据库回归：CI 中 MySQL 8.4 与 PostgreSQL 17。
+  - Go 检查：格式、中文注释、架构依赖、OpenAPI、文档一致性、`go vet ./...`、`golangci-lint ./...`、完整 `go test ./...`、server 并发 smoke race 全部通过。
+  - React 前端检查：中文注释、TypeScript 类型、OpenAPI 生成产物、前端测试、嵌入式前端构建与校验全部通过。
+- 该 run 对应 PR 最新 head。最终 head 相比已完成完整复验的前一源码提交仅删除临时验证 workflow 文件，没有业务源码变化。
+- 测试结论只覆盖 CI 声明的自动化测试环境；没有在真实闲鱼买家、订单或账号上执行操作，因此不构成平台 E2E 证明。
+- PR #1 仍为 open / unmerged；`main` 未修改。合并仍需仓库所有者明确决定。
