@@ -170,6 +170,9 @@ type PublishInput struct {
 	SKUs []PublishSKU
 	// SpecImages 是规格值绑定的图片，索引由 Specs 中的 ImageIndex 引用。
 	SpecImages []Image
+	// BeforePublish 在图片上传和类目准备完成、最终商品创建请求发出前执行。
+	// 持久化操作层应在此处完成 prepared -> started；失败时平台创建请求不得发出。
+	BeforePublish func(context.Context) error
 }
 
 // PublishResult 是平台返回的商品结果，经过端口转换后不暴露平台 DTO。
