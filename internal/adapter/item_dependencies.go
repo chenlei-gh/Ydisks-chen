@@ -71,6 +71,14 @@ func (d *ItemDependencies) NewItemPublishPort(client func() MTOPClient, logger *
 	return NewItemPublishPort(d.store, client, logger, update, recover)
 }
 
+// NewSinglePublishOperationRepository 创建单商品发布持久化操作账本。
+func (d *ItemDependencies) NewSinglePublishOperationRepository() *SinglePublishOperationRepository {
+	if d == nil {
+		return nil
+	}
+	return NewSinglePublishOperationRepository(d.store)
+}
+
 // NewItemPublishRepository 创建单商品发布结果仓储。
 func (d *ItemDependencies) NewItemPublishRepository() *ItemPublishRepository {
 	if d == nil {
