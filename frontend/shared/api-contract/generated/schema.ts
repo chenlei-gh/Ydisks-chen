@@ -2734,11 +2734,14 @@ export interface components {
         };
         SinglePublishOperationResponse: {
             operation_id: string;
+            /** @enum {string} */
             state: "prepared" | "started" | "remote_confirmed" | "local_confirmed" | "unknown";
             item_id: string;
             item_url: string;
         };
         ItemPublishRequest: {
+            /** @description 同一次逻辑发布在网络重试中复用的稳定操作标识 */
+            operation_id?: string;
             cookie_id: string;
             title: string;
             description: string;
@@ -10288,6 +10291,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description 当前用户可见的发布操作状态 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -10296,6 +10300,7 @@ export interface operations {
                     "application/json": components["schemas"]["SinglePublishOperationResponse"];
                 };
             };
+            /** @description 统一错误响应 */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10304,6 +10309,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description 统一错误响应 */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -10312,6 +10318,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description 操作不存在或不属于当前用户 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -10320,6 +10327,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description 统一错误响应 */
             500: {
                 headers: {
                     [name: string]: unknown;
