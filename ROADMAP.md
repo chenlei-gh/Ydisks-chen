@@ -81,16 +81,16 @@
 
 ### 阶段 2：P0 自动发货与补发缺口修复
 
-**当前修复批次**：P0 重复释放库存与 P1 人工补发台账结算已提交；新增 SQLite/多方言回归测试。2026-11-08 云端首次全量 Go 测试已实际执行：除 `tools/architecturecheck` 内部的 `TestStageTwoRealSourceGate` 因 `internal/notify/notifier.go` 原有 808 行超限而失败外，其余 Go 包均通过；该失败促成通知格式化/订阅过滤逻辑拆分至 `internal/notify/notifier_events.go`。拆分后的完整复验仍待执行，不能提前标记阶段 2 通过。当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)。
+**当前修复批次**：P0 重复释放库存与 P1 人工补发台账结算已提交；新增 SQLite/多方言回归测试。最新提交 `9e43bbd8e9b14f160dea394cde8f8d0e8adae8ca` 的 PR CI（run `42479315981`，2026-11-08）已全部通过：Go 完整测试与 server 并发 race、MySQL 8.4/PostgreSQL 17 多数据库回归、React 前端检查/测试/构建、真实服务二进制 + 临时 SQLite smoke 均成功；Go 格式、注释、架构、OpenAPI、文档一致性、vet、golangci-lint 也全部通过。通知模块拆分后的完整复验已完成。此结果不等于闲鱼真实账号/订单平台 E2E。当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)，仍 open、未合并。
 
 
 仅实施阶段 1 已证实的缺口。候选范围：
 
-- [~] 2.1 自动发货、人工补发、后台恢复之间的订单级互斥和执行权一致性（主路径已核实；多方言真正并发竞争测试已添加，待 CI 执行）。
+- [x] 2.1 自动发货、人工补发、后台恢复之间的订单级互斥和执行权一致性（主路径已核实；`TestMultiDB_AutomationPaidRunCrossTriggerConcurrency` 已由 CI 多方言回归通过）。
 - [x] 2.2 未知远端结果的隔离与人工核对，防止不安全自动重放（现有机制已覆盖，证据见 P0_AUDIT.md）。
-- [~] 2.3 卡密库存预占、消耗、释放、补取的原子性和可恢复性（重复释放修复已提交，等待多方言测试）。
-- [~] 2.4 动作检查点与终态收口的一致性（人工补发成功收口已补 reserved 台账结算，等待测试）。
-- [~] 2.5 补齐并发、重复事件、超时、断电/进程退出、数据库故障等回归测试（新增自动/人工并发领取、重复/并发释放及补发收口测试，完整矩阵待 CI 执行）。
+- [x] 2.3 卡密库存预占、消耗、释放、补取的原子性和可恢复性（重复释放修复及重复/并发回归测试已由 CI 多方言回归通过）。
+- [x] 2.4 动作检查点与终态收口的一致性（人工补发成功收口 reserved 台账兜底结算及故障注入回归已通过 Go 测试）。
+- [x] 2.5 补齐本轮范围内的并发、重复释放、补发收口及数据库故障回归测试（完整 Go 测试、server 并发 race 和 SQLite/MySQL/PostgreSQL CI 矩阵已通过；真实平台故障/交易行为仍未验证）。
 
 **验收标准**：
 
@@ -179,3 +179,13 @@
 - 已按职责拆分 `notifier.go`：事件级别/类型文案、事件格式化、订阅过滤、事件类型解析与排序函数迁入 `internal/notify/notifier_events.go`；主文件保留通知编排和发送入口。拆分后 `notifier.go` 为 552 行，新文件为 262 行（含 package/import/空行）；未修改通知语义。
 - 后续 commentlint 发现新文件首个私有函数缺少中文注释，已补充 `levelLabel` 注释。当前拆分后完整 Go 复验仍待运行；race、PR 全矩阵和多方言结果以最新 CI 为准。
 - 关键提交：`57b1283`（提取事件逻辑）、`20b283b`（缩减主文件）、`690df5d`（gofmt）、`2cac647`（补齐注释）。PR 保持 open，未合并；`main` 未修改。
+
+
+### 2026-11-08 最新提交最终验收记录
+
+- 最新 head：`9e43bbd8e9b14f160dea394cde8f8d0e8adae8ca`。
+- PR CI run：[`42479315981`](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42479315981)，结论 `success`；四个 job 全部成功：冒烟测试、MySQL/PostgreSQL 多数据库回归、Go 检查、React 前端检查。
+- Go job 的完整步骤全部通过：gofmt、中文注释、架构依赖、OpenAPI、文档一致性、`go vet`、`golangci-lint`、`go test ./...`、server 并发 smoke race。
+- 本次 CI 对应最新 PR head；最终 head 相比前一个已完成完整复验的源码提交仅清理临时验证 workflow，没有额外业务源码变更。
+- 验收边界：CI 证明自动化测试环境中的代码与数据库行为通过，不证明闲鱼真实账号/真实订单平台 E2E；本轮未执行真实买家、真实订单或真实账号操作。
+- PR #1 仍保持 open、未合并；`main` 未修改。是否合并由仓库所有者另行决定。
