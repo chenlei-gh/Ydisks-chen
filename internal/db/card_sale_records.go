@@ -185,7 +185,8 @@ func (c *Cards) tryReserveBatchData(ctx context.Context, cardID int64, meta Card
 }
 
 // ReleaseBatchData 把确定未发送的卡密放回库存头部并删除对应 reserved 台账，两者在同一事务内完成。
-// recordID 为零时只恢复库存（历史调用方没有台账）。恢复失败时调用方必须转人工核对，不能重复取卡。
+// recordID 大于零时，只有成功删除对应 reserved 台账的本次调用才恢复库存；重复调用是安全 no-op。
+// recordID 为零时保留历史无台账调用兼容，不具备按记录去重能力。恢复失败时调用方必须转人工核对，不能重复取卡。
 func (c *Cards) ReleaseBatchData(ctx context.Context, cardID, recordID int64, content string) error {
 	content = strings.TrimSpace(content)
 	if content == "" {
