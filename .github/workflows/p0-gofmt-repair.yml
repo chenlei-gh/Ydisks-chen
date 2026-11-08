@@ -38,7 +38,7 @@ jobs:
             internal/db/card_sale_records.go \
             internal/db/card_sale_records_test.go)"
 
-      - name: Check Chinese comments
+      - name: Recheck Chinese comments after declaration alignment
         run: go run ./tools/commentlint -mode check -root .
 
       - name: Check architecture dependencies
