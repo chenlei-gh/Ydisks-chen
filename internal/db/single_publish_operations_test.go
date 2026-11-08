@@ -78,7 +78,7 @@ func TestSinglePublishOperationsUnknownCannotBeStartedAgain(t *testing.T) {
 	operation := SinglePublishOperation{
 		OperationID: "single-publish-unknown-1", UserID: 9, CookieID: "account-9",
 		RequestFingerprint: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-		State: "prepared",
+		State:              "prepared",
 	}
 	if createErr := repository.CreatePrepared(context.Background(), operation); createErr != nil {
 		t.Fatalf("CreatePrepared: %v", createErr)
