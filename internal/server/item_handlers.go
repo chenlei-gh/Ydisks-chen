@@ -21,6 +21,7 @@ func (s *Server) mountItemsReal(r chi.Router) {
 	r.Post("/items/get-all-from-account", s.syncItemsFromAccount)
 	r.Post("/items/get-by-page", s.syncItemsPageFromAccount)
 	r.Post("/items/publish", s.publishItem)
+	r.Get("/items/publish-operations/{operation_id}", s.getSinglePublishOperation)
 	r.Post("/items/publish-categories/recommend", s.recommendItemPublishCategory)
 	r.Post("/items/publish-batches/preview", s.previewItemPublishBatch)
 	r.Post("/items/publish-batches", s.startItemPublishBatch)
@@ -151,13 +152,34 @@ func (s *Server) publishItem(w http.ResponseWriter, r *http.Request) {
 	for _, image := range specImages {
 		applicationSpecImages = append(applicationSpecImages, itemapp.Image{Filename: image.Filename, ContentType: image.ContentType, Data: image.Data})
 	}
-	// outcome、callErr 保存应用服务返回的发布结果及调用错误。
-	outcome, callErr := s.itemSinglePublishApplication().PublishSingle(r.Context(), itemapp.PublishInput{
+	// publishInput 保存已完成 HTTP 校验的应用层发布请求。
+	publishInput := itemapp.PublishInput{
 		UserID: userID, CookieID: cookieID, Title: title, Description: description,
 		PriceCents: priceCents, OriginalPriceCents: origCents, Quantity: quantity,
 		PostageMode: postageMode, PostageCents: postageCents, Location: applicationLocation,
 		Category: applicationCategory, Images: applicationImages, Specs: publishSpecs, SKUs: publishSKUs, SpecImages: applicationSpecImages,
-	})
+	}
+	// operationID 是客户端为同一次发布复用的 ID；旧客户端缺失时生成兼容的一次性 ID。
+	operationID := strings.TrimSpace(r.FormValue("operation_id"))
+	if operationID == "" {
+		// generatedID 保存旧客户端兼容使用的随机操作 ID。
+		generatedID, idErr := newSinglePublishOperationID()
+		if idErr != nil {
+			writeErr(w, http.StatusInternalServerError, "生成发布操作标识失败")
+			return
+		}
+		operationID = generatedID
+	}
+	// fingerprint 是服务端对发布字段、规格和图片内容计算的 SHA-256。
+	fingerprint, fingerprintErr := fingerprintSinglePublishRequest(publishInput)
+	if fingerprintErr != nil {
+		writeErr(w, http.StatusBadRequest, "计算发布请求指纹失败")
+		return
+	}
+	publishInput.OperationID = operationID
+	publishInput.RequestFingerprint = fingerprint
+	// outcome、callErr 保存应用服务返回的发布结果及调用错误。
+	outcome, callErr := s.itemSinglePublishApplication().PublishSingle(r.Context(), publishInput)
 	// res 用于本次流程后续判断的响应
 	res := outcome.Result
 	if callErr != nil {
@@ -768,4 +790,30 @@ func itemImageFromDetail(detail string) string {
 		return url
 	}
 	return ""
+}
+
+
+// getSinglePublishOperation 返回当前登录用户拥有的单商品发布操作状态。
+func (s *Server) getSinglePublishOperation(w http.ResponseWriter, r *http.Request) {
+	// session 保存认证中间件提供的当前用户会话。
+	session := auth.SessionFromContext(r.Context())
+	// operationID 是待查询的稳定发布操作标识。
+	operationID := strings.TrimSpace(chi.URLParam(r, "operation_id"))
+	if operationID == "" {
+		writeErr(w, http.StatusBadRequest, "缺少发布操作 ID")
+		return
+	}
+	// operation 保存按用户归属查询的持久化状态。
+	operation, err := s.itemSinglePublishApplication().GetPublishOperation(r.Context(), session.UserID, operationID)
+	if err != nil {
+		// 不区分不存在和其他用户的记录，避免通过状态接口探测他人操作。
+		writeErr(w, http.StatusNotFound, "发布操作不存在")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"operation_id": operation.OperationID,
+		"state": operation.State,
+		"item_id": operation.ItemID,
+		"item_url": operation.ItemURL,
+	})
 }
