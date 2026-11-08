@@ -81,7 +81,7 @@
 
 ### 阶段 2：P0 自动发货与补发缺口修复
 
-**当前修复批次**：P0 重复释放库存与 P1 人工补发台账结算已在分支提交；新增 SQLite/多方言回归测试，详见 `P0_AUDIT.md`。当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)。PR 尚无可见 CI run/status，因此所有相关任务保持进行中，不标记为通过。
+**当前修复批次**：P0 重复释放库存与 P1 人工补发台账结算已在分支提交；新增 SQLite/多方言回归测试，包括 `MarkSaleRecordsSold` 故障注入后补发收口兜底，详见 `P0_AUDIT.md`。当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)。PR 尚无可见 CI run/status，因此所有相关任务保持进行中，不标记为通过。
 
 
 仅实施阶段 1 已证实的缺口。候选范围：
