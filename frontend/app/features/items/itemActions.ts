@@ -156,16 +156,16 @@ const getOrCreateSinglePublishOperationID = async (
 ): Promise<string> => {
   // imageEntries 保存商品图片和规格图片及其用途标识。
   const imageEntries = [
-    ...form.images.map(file => ({ role: 'item', file })),
-    ...form.specs.flatMap(spec => spec.values.flatMap(value => value.image ? [{ role: spec.specId + ':' + value.valueId, file: value.image }] : [])),
+    ...form.images.map(/* imageFile 表示当前商品主图文件。 */ imageFile => ({ role: 'item', file: imageFile })),
+    ...form.specs.flatMap(/* spec 表示当前商品规格维度。 */ spec => spec.values.flatMap(/* value 表示当前规格维度的规格值。 */ value => value.image ? [{ role: spec.specId + ':' + value.valueId, file: value.image }] : [])),
   ];
   // imageDigests 保存图片字节摘要，避免仅按文件名复用操作 ID。
   const imageDigests: string[] = [];
-  for (const entry of imageEntries) {
+  for (const /* entry 表示当前参与指纹计算的图片及其用途。 */ entry of imageEntries) {
     // digest 是当前图片文件内容的 SHA-256。
     const digest = await crypto.subtle.digest('SHA-256', await entry.file.arrayBuffer());
     // digestHex 保存可参与规范化请求键的十六进制摘要。
-    const digestHex = Array.from(new Uint8Array(digest)).map(value => value.toString(16).padStart(2, '0')).join('');
+    const digestHex = Array.from(new Uint8Array(digest)).map(/* byte 表示摘要中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
     imageDigests.push(entry.role + '|' + entry.file.name + '|' + entry.file.type + '|' + digestHex);
   }
   // canonical 保存不包含图片二进制的规范化表单字段和图片摘要。
@@ -173,16 +173,16 @@ const getOrCreateSinglePublishOperationID = async (
     cookie_id: form.cookie_id, title: form.title, description: form.description,
     price: form.price, original_price: form.original_price, quantity: form.quantity,
     postage_mode: form.postage_mode, postage: form.postage,
-    specs: form.specs.map(spec => ({
+    specs: form.specs.map(/* spec 表示当前参与指纹计算的规格维度。 */ spec => ({
       specId: spec.specId, name: spec.name, supportImage: spec.supportImage,
-      values: spec.values.map(value => ({ valueId: value.valueId, value: value.value })),
+      values: spec.values.map(/* specValue 表示当前规格维度的一个值。 */ specValue => ({ valueId: specValue.valueId, value: specValue.value })),
     })),
     skuRows: form.skuRows, location, category, imageDigests,
   });
   // requestDigest 是当前完整表单的 SHA-256，用于隔离不同内容的发布操作。
   const requestDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
   // digestHex 是会话存储键使用的十六进制指纹。
-  const digestHex = Array.from(new Uint8Array(requestDigest)).map(value => value.toString(16).padStart(2, '0')).join('');
+  const digestHex = Array.from(new Uint8Array(requestDigest)).map(/* byte 表示请求指纹摘要中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
   // storageKey 按账号和请求指纹隔离，浏览器刷新后仍可恢复同一操作 ID。
   const storageKey = 'ydisks.single-publish.' + encodeURIComponent(form.cookie_id) + '.' + digestHex;
   try {
@@ -192,7 +192,7 @@ const getOrCreateSinglePublishOperationID = async (
     // random 保存新操作 ID 的密码学随机字节。
     const random = crypto.getRandomValues(new Uint8Array(16));
     // operationID 是本次发布的稳定随机标识。
-    const operationID = Array.from(random).map(value => value.toString(16).padStart(2, '0')).join('');
+    const operationID = Array.from(random).map(/* byte 表示随机操作 ID 中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
     window.sessionStorage.setItem(storageKey, operationID);
     return operationID;
   } catch {
