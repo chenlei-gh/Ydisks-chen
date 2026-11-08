@@ -34,7 +34,7 @@
 - `63e69f30ecdd6bc939ae06a72267aaca3f796888`：库存重复/并发释放与补发台账结算回归测试。
 - 当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)，open、ready for review，未合并。
 
-**验证状态**：尝试在本地克隆仓库时，运行环境无法解析 `github.com`，因此没有本地测试结果。仓库所有者已在 `Actions permissions` 中选择 `Allow all actions and reusable workflows` 并点击 Save。此前提交（`be13da760d528a7a47e82388be3463fa7f893e71`）发生在设置保存确认之前，因此不能视为保存后的触发验证。本次将在确认保存后再推送一个文档提交，触发新的 `pull_request` synchronize 事件；若仍无 run，再检查 Actions 总开关、上级策略或待批准状态。
+**验证状态**：尝试在本地克隆仓库时，运行环境无法解析 `github.com`，因此没有本地测试结果。仓库所有者已在 `Actions permissions` 中选择 `Allow all actions and reusable workflows` 并点击 Save。此前提交（`be13da760d528a7a47e82388be3463fa7f893e71`）发生在设置保存确认之前，因此不能视为保存后的触发验证。保存后已推送文档提交 `1b14e4fd2c257b4a2bed24d9f5bcdaa26ac2d1be`，但该 head 仍未出现 workflow run 或 commit status。说明问题不是单纯的设置未保存；需要在仓库 Actions 页面确认是否有 Enable/approval 提示，并检查账户/组织策略是否覆盖仓库设置。
 
 ## 2. 自动发货调用链（1.1）
 
@@ -201,5 +201,5 @@
 
 - 第一阶段审计先完成报告，再按报告进入最小修复；修复提交已在 1.1 节列明。
 - 本次 GitHub 代码读取与测试结构检查不等于运行测试；本地运行环境无法解析 `github.com`，目前没有本地 Go 测试结果。
-- PR #1（open，ready for review）已确认仓库所有者保存 Actions permissions；保存后的新 PR 更新事件将用于验证工作流能否启动。不得把“PR 已创建”描述为“CI 已通过”。
+- PR #1（open，ready for review）已确认仓库所有者保存 Actions permissions，且保存后新 head `1b14e4f` 仍无可见 workflow run/status；需检查 Actions 页面提示及上级策略。不得把“PR 已创建”描述为“CI 已通过”。
 - 本轮不在真实买家、真实订单或真实账号上执行发货/补发。
