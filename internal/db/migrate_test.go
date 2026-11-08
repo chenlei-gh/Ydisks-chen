@@ -283,12 +283,12 @@ func TestMigrate_UpgradesDatabaseWithMainChatVersions(t *testing.T) {
 	if !columnExists(t, rawDB, "automation_rule_actions", "delivery_template_id") {
 		t.Fatal("automation_rule_actions should reference delivery templates")
 	}
-	// finalVersion、versionErr 验证迁移账本已推进到图片库引用列的 00060，或记录读取失败。
+	// finalVersion、versionErr 验证迁移账本已推进到单商品发布操作账本的 00060，或记录读取失败。
 	finalVersion, versionErr := goose.GetDBVersion(rawDB)
 	if versionErr != nil {
 		t.Fatalf("read final migration version: %v", versionErr)
 	}
-	if finalVersion != 59 {
+	if finalVersion != 60 {
 		t.Fatalf("final migration version=%d, want 60", finalVersion)
 	}
 	if !columnExists(t, rawDB, "keywords", "keyword_expressions") || !columnExists(t, rawDB, "keywords", "match_type") {
