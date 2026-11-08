@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 // seedSaleCard 创建一个带 3 行库存的 data 卡密组并返回用户、账号和卡密组标识。
@@ -355,6 +356,118 @@ func TestMultiDB_CardSaleLedger(t *testing.T) {
 			byOrder, orderErr := tg.store.Cards.ListSaleRecordsByOrder(ctx, uid, cid, "o1")
 			if orderErr != nil || len(byOrder) != 1 || byOrder[0].Content != "k1" || byOrder[0].Status != SaleStatusSold || byOrder[0].BuyerID != "b1" {
 				t.Fatalf("按订单读取错误: %+v err=%v", byOrder, orderErr)
+			}
+		})
+	}
+}
+
+
+// TestCards_ReleaseBatchDataIsIdempotent 验证同一 reserved 台账记录重复释放不会重复恢复库存。
+func TestCards_ReleaseBatchDataIsIdempotent(t *testing.T) {
+	store, cleanup := newTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, _, cardID := seedSaleCard(t, store)
+	content, recordID, err := store.Cards.ReserveBatchData(ctx, cardID, CardSaleMeta{CookieID: "c1", OrderID: "release-once"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Cards.ReleaseBatchData(ctx, cardID, recordID, content); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Cards.ReleaseBatchData(ctx, cardID, recordID, content); err != nil {
+		t.Fatalf("重复释放应安全 no-op: %v", err)
+	}
+	if got := stockOf(t, store, cardID); got != "k1\\nk2\\nk3" {
+		t.Fatalf("重复释放不得重复增加库存, got %q", got)
+	}
+}
+
+// TestMultiDB_CardSaleReleaseIsIdempotent 验证多个 worker 同时释放同一 reserved 记录时库存只恢复一次。
+func TestMultiDB_CardSaleReleaseIsIdempotent(t *testing.T) {
+	for _, target := range allTestTargets(t) {
+		t.Run(target.name, func(t *testing.T) {
+			defer target.cleanup()
+			ctx := context.Background()
+			_, _, cardID := seedSaleCard(t, target.store)
+			content, recordID, err := target.store.Cards.ReserveBatchData(ctx, cardID, CardSaleMeta{CookieID: "c1", OrderID: "concurrent-release"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			start := make(chan struct{})
+			results := make(chan error, 2)
+			for i := 0; i < 2; i++ {
+				go func() {
+					<-start
+					results <- target.store.Cards.ReleaseBatchData(ctx, cardID, recordID, content)
+				}()
+			}
+			close(start)
+			first, second := <-results, <-results
+			// SQLite 在写锁竞争时可能返回可重试的数据库忙错误；两次调用结束后重试失败方，
+			// 以验证已提交的释放记录不会让同一内容再次进入库存。
+			for _, releaseErr := range []error{first, second} {
+				if releaseErr != nil {
+					if retryErr := target.store.Cards.ReleaseBatchData(ctx, cardID, recordID, content); retryErr != nil {
+						t.Fatalf("释放重试失败: first=%v second=%v retry=%v", first, second, retryErr)
+					}
+				}
+			}
+			if got := stockOf(t, target.store, cardID); got != "k1\\nk2\\nk3" {
+				t.Fatalf("并发重复释放导致库存虚增: %q", got)
+			}
+		})
+	}
+}
+
+// TestMultiDB_CardSaleReplayCompletionSettlesReserved 验证人工补发成功收口会兜底确认本运行的 reserved 台账。
+func TestMultiDB_CardSaleReplayCompletionSettlesReserved(t *testing.T) {
+	for _, target := range allTestTargets(t) {
+		t.Run(target.name, func(t *testing.T) {
+			defer target.cleanup()
+			ctx := context.Background()
+			userID, cookieID, cardID := seedSaleCard(t, target.store)
+			ruleID, err := target.store.Automation.Create(ctx, AutomationRuleInput{
+				UserID: userID, CookieID: cookieID, ItemID: "i1", Name: "replay-ledger",
+				TriggerType: "order_paid", Enabled: true,
+				Actions: []AutomationActionInput{{ActionType: "send_card", Enabled: true}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			runID, started, err := target.store.Automation.TryStartRun(ctx, AutomationRun{
+				RuleID: ruleID, CookieID: cookieID, ItemID: "i1", OrderID: "replay-ledger-order",
+				TriggerType: "order_paid", TriggerKey: "order_paid:replay-ledger-order",
+			})
+			if err != nil || !started {
+				t.Fatalf("启动运行失败: started=%v err=%v", started, err)
+			}
+			if claimed, claimErr := target.store.Automation.StartRunAction(ctx, runID, 1, 0, time.Now().UTC().Add(time.Minute).Unix()); claimErr != nil || !claimed {
+				t.Fatalf("领取动作失败: claimed=%v err=%v", claimed, claimErr)
+			}
+			proof := AutomationDeliveryProof{
+				TradeText: "previously delivered", ExpectedUnits: 1, PreparedUnits: 1,
+				Messages: []AutomationDeliveryMessage{{Kind: "text", Content: "previously delivered"}},
+			}
+			if err := target.store.Automation.QuarantineRunResultWithProof(ctx, runID, 1, 1, "manual replay fixture", &proof); err != nil {
+				t.Fatal(err)
+			}
+			attempt, claimed, err := target.store.Automation.ClaimDeliveryReplay(ctx, runID, 1, time.Now().UTC().Add(time.Minute).Unix())
+			if err != nil || !claimed || attempt != 2 {
+				t.Fatalf("领取人工补发失败: attempt=%d claimed=%v err=%v", attempt, claimed, err)
+			}
+			_, recordID, err := target.store.Cards.ReserveBatchData(ctx, cardID, CardSaleMeta{
+				RunID: runID, CookieID: cookieID, OrderID: "replay-ledger-order", ItemID: "i1",
+			})
+			if err != nil || recordID == 0 {
+				t.Fatalf("预占补发库存失败: record=%d err=%v", recordID, err)
+			}
+			if err := target.store.Automation.CompleteDeliveryReplay(ctx, runID, attempt); err != nil {
+				t.Fatal(err)
+			}
+			records, err := target.store.Cards.ListSaleRecordsByOrder(ctx, userID, cookieID, "replay-ledger-order")
+			if err != nil || len(records) != 1 || records[0].Status != SaleStatusSold {
+				t.Fatalf("补发成功收口后台账应为 sold: records=%+v err=%v", records, err)
 			}
 		})
 	}
