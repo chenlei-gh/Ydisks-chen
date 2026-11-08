@@ -361,7 +361,6 @@ func TestMultiDB_CardSaleLedger(t *testing.T) {
 	}
 }
 
-
 // TestCards_ReleaseBatchDataIsIdempotent 验证同一 reserved 台账记录重复释放不会重复恢复库存。
 func TestCards_ReleaseBatchDataIsIdempotent(t *testing.T) {
 	store, cleanup := newTestDB(t)
@@ -472,7 +471,6 @@ func TestMultiDB_CardSaleReplayCompletionSettlesReserved(t *testing.T) {
 		})
 	}
 }
-
 
 // TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold 验证旁路 MarkSaleRecordsSold 失败后，成功收口仍能在事务内兜底结算。
 func TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold(t *testing.T) {
