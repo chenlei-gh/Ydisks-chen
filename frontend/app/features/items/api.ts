@@ -112,6 +112,7 @@ export const createItem = async (cookieId: string, data: Partial<Item>): Promise
 
 // publishItem 发布商品。
 export const publishItem = async (form: {
+    /** operation_id 是同一次发布在重试和页面恢复时复用的稳定标识。 */ operation_id: string;
     /** cookie_id 表示登录凭证标识。 */ cookie_id: string;
     /** title 表示标题。 */ title: string;
     /** description 表示描述。 */ description: string;
@@ -133,6 +134,7 @@ export const publishItem = async (form: {
 }): Promise<ItemPublishResponse> => {
     // body 请求体，用于当前 API 处理流程。
     const body = new FormData();
+    body.set('operation_id', form.operation_id);
     body.set('cookie_id', form.cookie_id);
     body.set('title', form.title);
     body.set('description', form.description);
