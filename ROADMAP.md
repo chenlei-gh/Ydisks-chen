@@ -189,3 +189,40 @@
 - 本次 CI 对应最新 PR head；最终 head 相比前一个已完成完整复验的源码提交仅清理临时验证 workflow，没有额外业务源码变更。
 - 验收边界：CI 证明自动化测试环境中的代码与数据库行为通过，不证明闲鱼真实账号/真实订单平台 E2E；本轮未执行真实买家、真实订单或真实账号操作。
 - PR #1 仍保持 open、未合并；`main` 未修改。是否合并由仓库所有者另行决定。
+
+
+### 2026-11-08 阶段 3 / 阶段 4 交叉审计记录
+
+- 审计报告：[`docs/EXTERNAL_OPERATION_AUDIT.md`](docs/EXTERNAL_OPERATION_AUDIT.md)，基线 `4f066bb20962657f4969e9af819b47f65f3a7918`。
+- **阶段 3.1 已完成（静态审计）**：自动发货、普通聊天文本/图片、单商品发布、批量商品发布的状态记录与恢复边界已逐条核对。
+- **重要修正**：普通聊天不是“只有 WebSocket echo”。`internal/application/chat/send.go` 在发送前创建持久化 `sending` 消息，使用 MessageKey 关联，并收口为 `sent / failed / uncertain`；自动化发送额外等待 WS echo。图片上传与图片消息发送是两个独立外部副作用。
+- **阶段 3.2 已完成（语义对照）**：各域可映射到 not_started / started / remote_confirmed / local_confirmed / unknown 的概念，但不要求字段同名。
+- **阶段 3.3 已完成（决策）**：经审计不需要全局 ExternalOperationService。各域的订单 ledger/proof、消息记录/echo、批次行 lease/ItemID checkpoint 有不同业务约束；共享状态术语和测试场景即可。
+- **阶段 3.4 已完成（责任边界）**：lease/token/attempt 只对本地 DB 写入提供 fencing，不构成远端 exactly-once。闲鱼远端幂等键/按请求身份查询能力尚未证实。
+- **阶段 3.5 待完成**：需要把状态迁移、重复回调、超时和本地提交失败测试汇总，并在单商品发布修复后执行。
+- **阶段 4.1 部分完成**：已审计单商品、批量发布、批次行恢复、聊天图片上传/发送边界；仍需补齐规格发布和临时图片文件生命周期审计。
+- **阶段 4.2 已确认缺口**：单商品发布先调用 MTOP，获得 ItemID 后才本地 Upsert；没有远端调用前的持久化操作检查点。HTTP 已对已知 ItemID 的本地落库失败给出“勿重复发布”提示，但硬中断/响应丢失时缺少可恢复的本地身份记录。
+- **阶段 4.3 部分完成**：批量行已有独立状态、worker token、remote_started、ItemID/post_publish 检查点；需补齐 post_publish 续跑和 lease takeover 的针对性测试证据。
+- **阶段 4.4 待完成**：图片上传、附件临时目录清理和重复上传风险继续专项审计。
+- **本次仅提交审计文档，没有新增业务代码，也没有运行测试**。真实闲鱼平台测试继续暂停。
+- **下一批实现边界**：优先设计单商品发布的持久化操作身份/检查点和恢复；先核实 MTOP 是否存在可用幂等键或按请求身份查询能力。若平台不支持，则未知结果只能隔离人工核对，不得自动重发。随后与批量 post_publish 恢复测试、图片生命周期测试合并验证。
+
+
+### 2026-11-08 单商品幂等能力与批量恢复二次核查
+
+- **单商品请求身份核查**：`PublishItemRequest` 没有 caller-supplied operation ID；`publishItemOnce` 每次调用重新生成时间型 `uniqueCode`（Unix 微秒）。它不是稳定请求身份，当前没有证据证明其具备服务端去重语义。
+- **平台回查能力核查**：仓库的 `FetchItemsPage` 只能分页读取卖家商品列表，没有按 `uniqueCode` / 客户端操作身份回查发布结果的实现。按标题等内容相似度自动匹配不足以安全决定重发。
+- **决策**：单商品 MTOP 请求超时、响应丢失或进程硬中断后的结果应隔离为 `unknown/needs_review`；不得因“本地没记录到 ItemID”就自动重发。只有取得平台幂等/查询契约和可复现实验后，才重新评估自动恢复。
+- **批量 post_publish 复核**：`ItemBatchPublishPort.PublishRemoteRow` 在发现已有 ItemID 时直接复用检查点；`TestItemBatchPublishPortPersistsRemoteCheckpoint` 断言恢复不会再次调用平台（调用次数仍为 1）。现有防重实现已存在，不重复造轮子；待补 worker 层 post_publish 租约接管与最终收口的集成测试。
+- **图片资源边界**：主图/规格图先上传，再执行最终发布；上传成功不等于商品创建成功。发布前失败可能遗留孤立图片，当前未发现远端清理契约，后续按资源生命周期单独评估。
+- **验证状态**：本次为源码与既有测试源码审阅，没有运行新测试，也没有真实闲鱼操作。PR #2 的文档 CI 4/4 已通过，但不覆盖上述平台行为。
+
+
+### 2026-11-08 单商品发布持久化检查点实施前设计
+
+- 核实 `PublishItemRequest.BeforePublish` 已是最终商品创建请求发出前的 hook，且触发时图片上传和类目准备已完成；批量发布已使用，单商品尚未接入。
+- 设计原则：先持久化 `prepared`，hook 内再写 `started`，然后才发出最终创建请求；MTOP 返回 ItemID 后先写 `remote_confirmed`，再做 Cookie 写回和本地商品 Upsert，最后写 `local_confirmed`。
+- operation ID 必须由客户端在一次发布意图开始时生成并在未知结果重试时复用；同 ID 不同请求 fingerprint 冲突拒绝。图片不落库，但其摘要必须参与 fingerprint。
+- 远端请求已开始后遇到硬中断、网络未知、成功响应缺少 ItemID 或远端确认结果无法落库时，不得自动重发；同 ID 只能返回 `unknown/needs_review`。该 ID 不提供平台端 exactly-once 保证。
+- 实施范围应一次性包含 SQLite/MySQL/PostgreSQL migration、DB 原子状态转换、应用/适配器 hook、HTTP/OpenAPI、前端 ID 生命周期、重复请求/故障注入测试；不新增全局协调服务。
+- 本节为设计核查，不代表代码已实施或测试已运行。真实闲鱼平台测试仍暂停。
