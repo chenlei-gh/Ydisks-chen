@@ -191,7 +191,7 @@ func TestItemPublishPortRetriesAfterSessionRecovery(t *testing.T) {
 	// recovery 保存测试用会话恢复回调，并模拟恢复逻辑写入的新凭证。
 	recovery := func(ctx context.Context, cookieID string, recoveryErr error) bool {
 		recovered = recoveryErr != nil
-		// updateErr 保存模拟续期凭证写入的持久化错误。
+		// updateErr 保存模拟恢复凭证的数据库写入错误。
 		if updateErr := store.Cookies.UpdateValueExisting(ctx, cookieID, "unb=1; fresh=1"); updateErr != nil {
 			t.Fatalf("写入续期凭证失败: %v", updateErr)
 		}
@@ -263,5 +263,55 @@ func TestPublishErrorToApplicationKeepsNonPlatformError(t *testing.T) {
 	}
 	if publishErrorToApplication(nil) != nil {
 		t.Fatal("空错误应保持为空")
+	}
+}
+
+// TestItemPublishPortDoesNotReplayAfterFinalPublishGate 验证最终创建请求闸门通过后不会因 Session 过期而自动重放。
+func TestItemPublishPortDoesNotReplayAfterFinalPublishGate(t *testing.T) {
+	// store、cleanup 保存当前测试使用的 SQLite 存储及清理函数。
+	store, cleanup := newAdapterTestStore(t)
+	defer cleanup()
+	// calls 记录平台发布方法的调用次数。
+	calls := 0
+	// gateCalls 记录最终商品创建请求前闸门的执行次数。
+	gateCalls := 0
+	// client 模拟最终请求闸门通过后平台返回 Session 过期。
+	client := itemPublishClientStub{publish: func(ctx context.Context, _ string, request mtop.PublishItemRequest) (*mtop.PublishItemResult, error) {
+		calls++
+		if request.BeforePublish == nil {
+			t.Fatal("最终发布前闸门未传递给 MTOP 客户端")
+		}
+		// gateErr 保存模拟最终请求闸门的执行错误。
+		if gateErr := request.BeforePublish(ctx); gateErr != nil {
+			t.Fatalf("最终发布前闸门执行失败: %v", gateErr)
+		}
+		return nil, &mtop.SessionExpiredError{API: "publish"}
+	}}
+	// recovered 记录凭证恢复回调是否执行。
+	recovered := false
+	// recovery 模拟凭证恢复成功；但最终发布闸门通过后不应据此重放商品创建请求。
+	recovery := func(ctx context.Context, cookieID string, recoveryErr error) bool {
+		recovered = recoveryErr != nil
+		// updateErr 保存测试中写入恢复凭证时的错误。
+		if updateErr := store.Cookies.UpdateValueExisting(ctx, cookieID, "unb=1; fresh=1"); updateErr != nil {
+			t.Fatalf("写入恢复凭证失败: %v", updateErr)
+		}
+		return true
+	}
+	// port 是绑定测试数据库、平台替身和凭证恢复回调的发布适配器。
+	port := NewItemPublishPort(store, func() mtop.Client { return client }, nil, nil, recovery)
+	// outcome、publishErr 保存最终闸门通过后的发布结果和错误。
+	outcome, publishErr := port.Publish(context.Background(), itemapp.PublishInput{
+		UserID: 1, CookieID: "cid", Title: "闸门测试商品", PriceCents: 100, Quantity: 1,
+		BeforePublish: func(context.Context) error {
+			gateCalls++
+			return nil
+		},
+	})
+	if publishErr == nil || outcome.Result != nil {
+		t.Fatalf("最终请求结果未知时应返回错误而不是成功: outcome=%+v err=%v", outcome, publishErr)
+	}
+	if !recovered || calls != 1 || gateCalls != 1 {
+		t.Fatalf("最终请求闸门通过后发生了不安全重放: recovered=%v calls=%d gateCalls=%d", recovered, calls, gateCalls)
 	}
 }

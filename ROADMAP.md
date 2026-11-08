@@ -234,3 +234,11 @@
 - 覆盖 `remote_started` 且无 ItemID 的行必须转为 `failed/uncertain_remote`，普通 `ResetFailed` 不得重新打开该行。
 - 覆盖已保存 ItemID/URL/raw JSON 的 `post_publish` 行在接管后回到可领取状态，保留远端检查点，并允许新 worker 完成 success 收口。
 - 本测试是 SQLite 真实数据库层面的状态迁移回归，不是完整 worker + 闲鱼平台 E2E；多数据库覆盖与 Go 全量结果以新 PR CI 为准。
+
+### 2026-11-08 单商品发布最终请求闸门重试保护
+
+- `PublishInput` 新增 `BeforePublish` 回调，适配器将其传递到 MTOP 已有的 `PublishItemRequest.BeforePublish` 钩子。
+- 适配器记录最终创建请求闸门是否已通过：闸门通过后，即使随后返回 Session 过期错误，也不再自动恢复凭证并重放完整商品发布流程。
+- 闸门尚未通过时（例如图片上传或类目准备阶段遇到明确 Session 过期），原有一次凭证恢复重试仍保留；该路径不代表商品创建请求已发出。
+- 新增回归测试模拟闸门通过后 Session 过期，验证平台发布方法仅调用一次。真实 MTOP/闲鱼平台行为未测试。
+- 该回调为下一步接入持久化 `prepared -> started` 检查点预留应用层通道；当前 HTTP 流程尚未提供 operation ID，也尚未写入操作记录，因此不能宣称单商品发布的未知结果已完整闭环。
