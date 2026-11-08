@@ -26,8 +26,8 @@ type PublishOperationLedger interface {
 	CreatePrepared(context.Context, PublishOperation) error
 	GetForUser(context.Context, int64, string) (PublishOperation, error)
 	MarkStarted(context.Context, int64, string) error
-	MarkRemoteConfirmed(context.Context, int64, string, string, string, string) error
-	MarkLocalConfirmed(context.Context, int64, string) error
+	MarkRemoteConfirmed(context.Context, int64, string, string, string, string, ...string) error
+	MarkLocalConfirmed(context.Context, int64, string, ...string) error
 	MarkUnknown(context.Context, int64, string, string) error
 }
 
@@ -76,7 +76,11 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 		if decodeErr != nil {
 			return PublishOutcome{}, decodeErr
 		}
-		return PublishOutcome{Result: result}, nil
+		outcome := PublishOutcome{Result: result}
+		if operation.ErrorMessage != "" {
+			outcome.ResponseCookieErr = errors.New(operation.ErrorMessage)
+		}
+		return outcome, nil
 	case "remote_confirmed":
 		// result 保存远端已确认、只需恢复本地商品写入的结果。
 		result, decodeErr := decodePublishOperationResult(operation)
@@ -84,11 +88,14 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 			return PublishOutcome{}, decodeErr
 		}
 		outcome := PublishOutcome{Result: result}
+		if operation.ErrorMessage != "" {
+			outcome.ResponseCookieErr = errors.New(operation.ErrorMessage)
+		}
 		outcome.LocalSaveErr = svc.savePublishedItem(ctx, input, result)
 		if outcome.LocalSaveErr != nil {
 			return outcome, nil
 		}
-		if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID); err != nil {
+		if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID, operation.ErrorMessage); err != nil {
 			return outcome, fmt.Errorf("本地商品已保存，但操作账本收口失败: %w", err)
 		}
 		return outcome, nil
@@ -146,14 +153,19 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 		return outcome, fmt.Errorf("序列化平台发布结果失败: %w", marshalErr)
 	}
 	// remoteErr 保存远端成功结果检查点写入失败原因；此时不得再发起新的远端创建请求。
-	if remoteErr := svc.operations.MarkRemoteConfirmed(ctx, input.UserID, input.OperationID, outcome.Result.ItemID, outcome.Result.ItemURL, string(resultJSON)); remoteErr != nil {
+	// cookieWarning 保存平台成功后 Cookie 更新未能持久化的提示，恢复时仍需返回给用户。
+	cookieWarning := ""
+	if outcome.ResponseCookieErr != nil {
+		cookieWarning = outcome.ResponseCookieErr.Error()
+	}
+	if remoteErr := svc.operations.MarkRemoteConfirmed(ctx, input.UserID, input.OperationID, outcome.Result.ItemID, outcome.Result.ItemURL, string(resultJSON), cookieWarning); remoteErr != nil {
 		return outcome, fmt.Errorf("平台已返回商品 ID %s，但持久化远端结果失败，禁止重发: %w", outcome.Result.ItemID, remoteErr)
 	}
 	outcome.LocalSaveErr = svc.savePublishedItem(ctx, input, outcome.Result)
 	if outcome.LocalSaveErr != nil {
 		return outcome, nil
 	}
-	if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID); err != nil {
+	if err := svc.operations.MarkLocalConfirmed(ctx, input.UserID, input.OperationID, cookieWarning); err != nil {
 		return outcome, fmt.Errorf("本地商品已保存，但操作账本收口失败: %w", err)
 	}
 	return outcome, nil
