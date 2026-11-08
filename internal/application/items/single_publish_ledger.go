@@ -195,3 +195,12 @@ func (svc *Service) savePublishedItem(ctx context.Context, input PublishInput, r
 		MultiQuantityDelivery: input.Quantity > 1, IsMultiSpec: len(input.Specs) > 0,
 	})
 }
+
+
+// GetPublishOperation 读取当前用户可见的单商品发布操作状态。
+func (svc *Service) GetPublishOperation(ctx context.Context, userID int64, operationID string) (PublishOperation, error) {
+	if svc == nil || svc.operations == nil {
+		return PublishOperation{}, errors.New("单商品发布操作账本未初始化")
+	}
+	return svc.operations.GetForUser(ctx, userID, operationID)
+}
