@@ -208,6 +208,32 @@ func (c *Cards) tryReleaseBatchData(ctx context.Context, cardID, recordID int64,
 		return false, beginErr
 	}
 	defer func() { _ = tx.Rollback() }()
+	if recordID > 0 {
+		// 先原子领取并删除 reserved 台账，再恢复库存。若相同 recordID 已被释放，
+		// 删除影响 0 行且记录不存在，直接 no-op；绝不能再次把内容前插到库存。
+		deleteResult, deleteErr := tx.ExecContext(ctx,
+			`DELETE FROM card_sale_records WHERE id=? AND card_id=? AND status=?`,
+			recordID, cardID, SaleStatusReserved)
+		if deleteErr != nil {
+			return false, deleteErr
+		}
+		affected, affectedErr := deleteResult.RowsAffected()
+		if affectedErr != nil {
+			return false, affectedErr
+		}
+		if affected != 1 {
+			// 不存在表示之前已成功释放；仍存在则说明状态或卡组不匹配，不能静默恢复。
+			var exists int
+			readErr := tx.QueryRowContext(ctx, `SELECT 1 FROM card_sale_records WHERE id=?`, recordID).Scan(&exists)
+			if errors.Is(readErr, sql.ErrNoRows) {
+				return false, nil
+			}
+			if readErr != nil {
+				return false, readErr
+			}
+			return false, fmt.Errorf("卡密售出台账 %d 不属于卡组 %d 的 reserved 记录", recordID, cardID)
+		}
+	}
 	// current 保存卡密组当前库存快照。
 	var current sql.NullString
 	// scanErr 保存读取当前库存的错误，无行时映射为 ErrNotFound。
@@ -222,22 +248,16 @@ func (c *Cards) tryReleaseBatchData(ctx context.Context, cardID, recordID int64,
 	if current.Valid && strings.TrimSpace(current.String) != "" {
 		merged += "\n" + current.String
 	}
-	// res、execErr 保存带库存快照守卫的恢复更新结果。
+	// res、execErr 保存带库存快照守卫的恢复更新结果；CAS 冲突会回滚前面的台账删除并重试。
 	res, execErr := tx.ExecContext(ctx,
 		`UPDATE cards SET data_content=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND COALESCE(data_content,'')=?`,
 		merged, cardID, current.String)
 	if execErr != nil {
 		return false, execErr
 	}
-	// affected、affectedErr 保存恢复更新命中行数及读取错误；未命中说明库存快照冲突需重试。
+	// affected、affectedErr 保存库存更新命中行数；未命中说明库存快照冲突，事务回滚后重试。
 	if affected, affectedErr := res.RowsAffected(); affectedErr != nil || affected != 1 {
 		return affectedErr == nil, affectedErr
-	}
-	if recordID > 0 {
-		// deleteErr 保存删除 reserved 台账的错误，失败时库存恢复一并回滚。
-		if _, deleteErr := tx.ExecContext(ctx, `DELETE FROM card_sale_records WHERE id=? AND status=?`, recordID, SaleStatusReserved); deleteErr != nil {
-			return false, deleteErr
-		}
 	}
 	return false, tx.Commit()
 }
