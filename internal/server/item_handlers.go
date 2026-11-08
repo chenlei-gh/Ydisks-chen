@@ -821,8 +821,8 @@ func (s *Server) getSinglePublishOperation(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"operation_id": operation.OperationID,
-		"state": operation.State,
-		"item_id": operation.ItemID,
-		"item_url": operation.ItemURL,
+		"state":        operation.State,
+		"item_id":      operation.ItemID,
+		"item_url":     operation.ItemURL,
 	})
 }
