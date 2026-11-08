@@ -224,7 +224,7 @@ func TestSinglePublishLedgerRejectsFingerprintReuse(t *testing.T) {
 	publisher := &ledgerPublisherFake{result: &PublishResult{ItemID: "item-123"}}
 	// repository 保存本地商品仓储替身。
 	repository := &ledgerRepositoryFake{}
-	// service 保存启用持久化操作账本的应用服务。
+	// service、err 保存被测应用服务及构造校验结果。
 	service, err := NewServiceWithOperationLedger(publisher, repository, ledger)
 	if err != nil {
 		t.Fatalf("NewServiceWithOperationLedger error: %v", err)
@@ -260,18 +260,20 @@ func TestSinglePublishLedgerPreservesCookieWarning(t *testing.T) {
 	}
 	// repository 保存本地商品仓储替身。
 	repository := &ledgerRepositoryFake{}
-	// service 保存启用持久化操作账本的应用服务。
+	// service、err 保存被测应用服务及构造校验结果。
 	service, err := NewServiceWithOperationLedger(publisher, repository, ledger)
 	if err != nil {
 		t.Fatalf("NewServiceWithOperationLedger error: %v", err)
 	}
 	// input 保存本次测试使用的稳定操作标识和指纹。
 	input := PublishInput{UserID: 7, CookieID: "account-7", OperationID: "op-cookie-warning", RequestFingerprint: "fp-warning"}
+	// first、err 保存首次发布的结果及应用服务错误。
 	first, err := service.PublishSingle(context.Background(), input)
 	if err != nil || !errors.Is(first.ResponseCookieErr, cookieWarning) {
 		t.Fatalf("first outcome=%+v err=%v", first, err)
 	}
 	// second 保存重复请求读取的持久化结果。
+	// second、err 保存重复提交后的持久化结果及应用服务错误。
 	second, err := service.PublishSingle(context.Background(), input)
 	if err != nil || second.Result == nil || !errors.Is(second.ResponseCookieErr, cookieWarning) {
 		t.Fatalf("second outcome=%+v err=%v", second, err)
