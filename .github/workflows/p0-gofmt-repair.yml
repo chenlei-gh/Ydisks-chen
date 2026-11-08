@@ -42,6 +42,8 @@ jobs:
         run: go run ./tools/commentlint -mode check -root .
 
       - name: Check architecture dependencies
+        id: architecture
+        continue-on-error: true
         run: go run ./tools/architecturecheck
 
       - name: Check OpenAPI routes and specification
@@ -64,6 +66,10 @@ jobs:
 
       - name: Run server concurrency smoke race
         run: make test-server-race
+
+      - name: Enforce architecture gate after independent checks
+        if: always()
+        run: test "${{ steps.architecture.outcome }}" = "success"
 
       - name: Commit formatted files and remove temporary workflow
         env:
