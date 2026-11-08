@@ -11,54 +11,54 @@ import (
 
 // Store 聚合各 repository，供上层（HTTP server、account supervisor 等）统一持有。
 type Store struct {
-	DB                *sql.DB
-	Dialect           Dialect
-	Users             *Users
-	Sessions          *Sessions
-	Cookies           *Cookies
-	Items             *Items
-	Cards             *Cards
-	Automation        *AutomationRules
-	DeliveryTemplates *DeliveryTemplateStore
-	Orders            *Orders
+	DB                      *sql.DB
+	Dialect                 Dialect
+	Users                   *Users
+	Sessions                *Sessions
+	Cookies                 *Cookies
+	Items                   *Items
+	Cards                   *Cards
+	Automation              *AutomationRules
+	DeliveryTemplates       *DeliveryTemplateStore
+	Orders                  *Orders
 	// OrderWrites 保存订单与商品基础信息跨仓储原子写入的窄 Unit of Work。
-	OrderWrites      *OrderWriteUnitOfWork
-	Reconciliations  *OrderReconciliations
-	OrderRefreshJobs *OrderRefreshJobs
-	Keywords         *Keywords
-	DefaultReps      *DefaultReplies
-	ItemReps         *ItemReplies
+	OrderWrites             *OrderWriteUnitOfWork
+	Reconciliations         *OrderReconciliations
+	OrderRefreshJobs        *OrderRefreshJobs
+	Keywords                *Keywords
+	DefaultReps             *DefaultReplies
+	ItemReps                *ItemReplies
 	// ItemGreetings 保存商品首次回复规则与按会话去重的投递记录。
-	ItemGreetings *ItemGreetings
+	ItemGreetings           *ItemGreetings
 	// LibraryImages 保存本地资源库图片的元数据；图片字节位于上传根目录。
-	LibraryImages *LibraryImages
+	LibraryImages           *LibraryImages
 	// ProductTemplates 保存可批量铺货的商品模板。
-	ProductTemplates *ProductTemplates
-	AIReply          *AIReply
+	ProductTemplates        *ProductTemplates
+	AIReply                 *AIReply
 	// ItemAISettings 保存商品级 AI 启停覆盖与专属资料。
-	ItemAISettings *ItemAISettings
-	Notifications  *Notifications
-	Settings       *SystemSettings
-	UserSettings   *UserSettings
-	WSMessages     *WSMessageStore
-	PublishBatches *ItemPublishBatches
+	ItemAISettings          *ItemAISettings
+	Notifications           *Notifications
+	Settings                *SystemSettings
+	UserSettings            *UserSettings
+	WSMessages              *WSMessageStore
+	PublishBatches          *ItemPublishBatches
 	// SinglePublishOperations 保存单商品发布的远端请求检查点，未知结果不得自动重发。
 	SinglePublishOperations *SinglePublishOperations
-	Tokens         *AccountTokens
-	Renewal        *RenewalStore
-	LoginLogs      *AccountLoginLogs
-	RiskLogs       *RiskControlLogs
+	Tokens                  *AccountTokens
+	Renewal                 *RenewalStore
+	LoginLogs               *AccountLoginLogs
+	RiskLogs                *RiskControlLogs
 	// SecurityAudit 保存敏感配置访问审计记录。
-	SecurityAudit *SecurityAuditLogs
-	Chats         *ChatStore
-	AccountTasks  *AccountTaskStore
-	Admin         *AdminQueries
-	Analytics     *AnalyticsQueries
+	SecurityAudit           *SecurityAuditLogs
+	Chats                   *ChatStore
+	AccountTasks            *AccountTaskStore
+	Admin                   *AdminQueries
+	Analytics               *AnalyticsQueries
 
-	credentialMu    sync.Mutex
-	credentialLocks map[string]*credentialLockEntry
+	credentialMu            sync.Mutex
+	credentialLocks         map[string]*credentialLockEntry
 	// pricingModeMu 串行化 AI 议价与固定规则改价的互斥配置写入；锁内只允许短数据库事务，禁止外部 I/O。
-	pricingModeMu sync.Mutex
+	pricingModeMu           sync.Mutex
 }
 
 // LockPricingMode 串行化当前进程内的互斥改价模式检查与写入。
@@ -85,43 +85,43 @@ func NewStore(db *sql.DB, dialect Dialect) *Store {
 	// items、orders 保存 Store 内共享的商品和订单仓储；Unit of Work 必须复用它们以保持方言与连接池一致。
 	items, orders := &Items{DB: db, Dialect: dialect}, &Orders{DB: db, Dialect: dialect}
 	return &Store{
-		DB:                db,
-		Dialect:           dialect,
-		Users:             &Users{DB: db},
-		Sessions:          &Sessions{DB: db, Dialect: dialect},
-		Cookies:           &Cookies{DB: db, Dialect: dialect, codec: codec},
-		Items:             items,
-		Cards:             &Cards{DB: db, Dialect: dialect, codec: codec},
-		Automation:        &AutomationRules{DB: db, Dialect: dialect, codec: codec},
-		DeliveryTemplates: &DeliveryTemplateStore{DB: db, Dialect: dialect},
-		Orders:            orders,
-		OrderWrites:       newOrderWriteUnitOfWork(db, orders, items),
-		Reconciliations:   &OrderReconciliations{DB: db, Dialect: dialect},
-		OrderRefreshJobs:  &OrderRefreshJobs{DB: db},
-		Keywords:          &Keywords{DB: db, Dialect: dialect},
-		DefaultReps:       &DefaultReplies{DB: db, Dialect: dialect},
-		ItemReps:          &ItemReplies{DB: db, Dialect: dialect},
-		ItemGreetings:     &ItemGreetings{DB: db, Dialect: dialect},
-		LibraryImages:     &LibraryImages{DB: db, Dialect: dialect},
-		ProductTemplates:  &ProductTemplates{DB: db, Dialect: dialect},
-		AIReply:           &AIReply{DB: db, Dialect: dialect, codec: codec},
-		ItemAISettings:    &ItemAISettings{DB: db, Dialect: dialect},
-		Notifications:     &Notifications{DB: db, Dialect: dialect, codec: codec},
-		Settings:          &SystemSettings{DB: db, Dialect: dialect, codec: codec},
-		UserSettings:      &UserSettings{DB: db, Dialect: dialect},
-		WSMessages:        &WSMessageStore{DB: db},
-		PublishBatches:    &ItemPublishBatches{DB: db},
+		DB                     : db,
+		Dialect                : dialect,
+		Users                  : &Users{DB: db},
+		Sessions               : &Sessions{DB: db, Dialect: dialect},
+		Cookies                : &Cookies{DB: db, Dialect: dialect, codec: codec},
+		Items                  : items,
+		Cards                  : &Cards{DB: db, Dialect: dialect, codec: codec},
+		Automation             : &AutomationRules{DB: db, Dialect: dialect, codec: codec},
+		DeliveryTemplates      : &DeliveryTemplateStore{DB: db, Dialect: dialect},
+		Orders                 : orders,
+		OrderWrites            : newOrderWriteUnitOfWork(db, orders, items),
+		Reconciliations        : &OrderReconciliations{DB: db, Dialect: dialect},
+		OrderRefreshJobs       : &OrderRefreshJobs{DB: db},
+		Keywords               : &Keywords{DB: db, Dialect: dialect},
+		DefaultReps            : &DefaultReplies{DB: db, Dialect: dialect},
+		ItemReps               : &ItemReplies{DB: db, Dialect: dialect},
+		ItemGreetings          : &ItemGreetings{DB: db, Dialect: dialect},
+		LibraryImages          : &LibraryImages{DB: db, Dialect: dialect},
+		ProductTemplates       : &ProductTemplates{DB: db, Dialect: dialect},
+		AIReply                : &AIReply{DB: db, Dialect: dialect, codec: codec},
+		ItemAISettings         : &ItemAISettings{DB: db, Dialect: dialect},
+		Notifications          : &Notifications{DB: db, Dialect: dialect, codec: codec},
+		Settings               : &SystemSettings{DB: db, Dialect: dialect, codec: codec},
+		UserSettings           : &UserSettings{DB: db, Dialect: dialect},
+		WSMessages             : &WSMessageStore{DB: db},
+		PublishBatches         : &ItemPublishBatches{DB: db},
 		SinglePublishOperations: &SinglePublishOperations{DB: db},
-		Tokens:            &AccountTokens{DB: db, Dialect: dialect, codec: codec},
-		Renewal:           &RenewalStore{DB: db, Dialect: dialect},
-		LoginLogs:         &AccountLoginLogs{DB: db},
-		RiskLogs:          &RiskControlLogs{DB: db, Dialect: dialect},
-		SecurityAudit:     &SecurityAuditLogs{DB: db},
-		Chats:             &ChatStore{DB: db, Dialect: dialect},
-		AccountTasks:      &AccountTaskStore{DB: db, Dialect: dialect},
-		Admin:             &AdminQueries{DB: db},
-		Analytics:         &AnalyticsQueries{DB: db},
-		credentialLocks:   make(map[string]*credentialLockEntry),
+		Tokens                 : &AccountTokens{DB: db, Dialect: dialect, codec: codec},
+		Renewal                : &RenewalStore{DB: db, Dialect: dialect},
+		LoginLogs              : &AccountLoginLogs{DB: db},
+		RiskLogs               : &RiskControlLogs{DB: db, Dialect: dialect},
+		SecurityAudit          : &SecurityAuditLogs{DB: db},
+		Chats                  : &ChatStore{DB: db, Dialect: dialect},
+		AccountTasks           : &AccountTaskStore{DB: db, Dialect: dialect},
+		Admin                  : &AdminQueries{DB: db},
+		Analytics              : &AnalyticsQueries{DB: db},
+		credentialLocks        : make(map[string]*credentialLockEntry),
 	}
 }
 
