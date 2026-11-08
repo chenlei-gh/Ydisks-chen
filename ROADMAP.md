@@ -32,11 +32,24 @@
 ### 阶段 0：建立可复核的基线
 
 - [x] 0.1 建立本路线图，作为项目内唯一的优化顺序与状态记录入口。
-- [ ] 0.2 记录本次优化基线：上游仓库、个人 Fork、默认分支、开发分支、基线 commit SHA、Go / Node 版本。
-- [ ] 0.3 盘点现有测试入口和可用数据库测试环境，明确单元测试、真实数据库集成测试、平台 E2E 的边界。
-- [ ] 0.4 建立每阶段的证据记录格式：代码路径、关键调用链、数据库状态/约束、测试名称与命令、实际结果、未覆盖风险。
+- [x] 0.2 记录本次优化基线：上游仓库、个人 Fork、默认分支、开发分支、基线 commit SHA、CI Go / Node 版本。
+- [x] 0.3 盘点现有测试入口和 CI 数据库测试环境，明确单元测试、真实数据库集成测试、平台 E2E 的边界。
+- [x] 0.4 建立每阶段的证据记录格式：代码路径、关键调用链、数据库状态/约束、测试名称与命令、实际结果、未覆盖风险。
 
 **验收标准**：基线信息可从仓库和 CI 复现；测试类型和边界清楚；没有把尚未运行的测试标成通过。
+
+**基线记录（2026-11-08，GitHub 仓库核对）**：
+
+- 上游：`Christ9038/Ydisks-Xianyu-Helper`，默认分支 `main`。
+- Fork：`chenlei-gh/Ydisks-chen`，默认分支 `main`；开发分支：`ydisks-enhanced/p0-delivery-safety`。
+- 上游 `main` 与 Fork `main` 当前均为 `081e7f56b5a50c8e98db5309042f0fa5bd8119b7`；本开发分支基于该 SHA，目前仅领先 1 个文档提交 `67d0a567ae5009dd310cc8fbb4aa541cfc2c7cec`（新增本路线图），没有业务代码改动。
+- Go：`go.mod` 声明 `go 1.26.4`；CI 使用 `actions/setup-go` 的 `go-version-file: go.mod`。这是项目/CI 目标版本，不代表已测得本地安装版本。
+- Node：CI 使用 Node.js 24；前端依赖锁文件为 `frontend/package-lock.json`。
+- CI 工作流：`.github/workflows/ci.yml`。Go job 包含格式、注释、架构、OpenAPI、文档、vet、golangci-lint、`go test ./...` 和 server race 子集；另有真实二进制 + 临时 SQLite smoke。
+- 数据库测试：普通 `newTestDB` 使用每测试独立临时 SQLite 文件；`allTestTargets` 默认 SQLite，配置 `TEST_MYSQL_URL` / `TEST_POSTGRES_URL` 时追加真实 MySQL / PostgreSQL。CI 的 multidb job 启动 MySQL 8.4 与 PostgreSQL 17，并通过 `make test-multidb` 设置 `REQUIRE_MULTIDB=1`，缺任一 URL 会失败。
+- 测试边界：SQLite 仓储测试和多方言数据库测试不等于闲鱼平台 E2E；CI smoke 是真实服务二进制 + 临时 SQLite，不证明闲鱼外部接口真实发货。当前开发分支只有文档提交，尚无本分支代码测试结果；本次审计没有声称测试已通过。
+- 证据来源：`go.mod`、`frontend/package.json`、`.github/workflows/ci.yml`、`Makefile`、`internal/db/repository_test.go`、`internal/db/multidb_test.go`。
+
 
 ### 阶段 1：P0 自动发货与补发安全审计（先审计，不预设要重写）
 
