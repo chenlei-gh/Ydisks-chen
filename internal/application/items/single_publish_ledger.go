@@ -208,7 +208,6 @@ func (svc *Service) savePublishedItem(ctx context.Context, input PublishInput, r
 	})
 }
 
-
 // GetPublishOperation 读取当前用户可见的单商品发布操作状态。
 func (svc *Service) GetPublishOperation(ctx context.Context, userID int64, operationID string) (PublishOperation, error) {
 	if svc == nil || svc.operations == nil {
