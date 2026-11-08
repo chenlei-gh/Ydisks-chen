@@ -235,7 +235,7 @@ func TestSinglePublishLedgerPreservesCookieWarning(t *testing.T) {
 	cookieWarning := errors.New("cookie persistence failed")
 	// publisher 保存返回商品成功但 Cookie 写回失败的平台替身。
 	publisher := &ledgerPublisherFake{
-		result: &PublishResult{ItemID: "item-cookie-warning"},
+		result:            &PublishResult{ItemID: "item-cookie-warning"},
 		responseCookieErr: cookieWarning,
 	}
 	// repository 保存本地商品仓储替身。
