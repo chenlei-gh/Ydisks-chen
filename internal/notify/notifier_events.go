@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// levelLabel 将通知级别转换为面向用户的展示文本。
 func levelLabel(level string) string {
 	switch level {
 	case "critical":
