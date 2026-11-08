@@ -216,3 +216,74 @@ func TestAutomationOwnershipWriteFailureRollsBack(t *testing.T) {
 		})
 	}
 }
+
+
+// TestMultiDB_AutomationPaidRunCrossTriggerConcurrency 验证自动事件与人工完整发货同时竞争同一订单时只能创建一条运行。
+func TestMultiDB_AutomationPaidRunCrossTriggerConcurrency(t *testing.T) {
+	for _, target := range allTestTargets(t) {
+		t.Run(target.name, func(t *testing.T) {
+			defer target.cleanup()
+			ctx := context.Background()
+			userID, cookieID := seedAccount(t, target.store)
+			ruleID, err := target.store.Automation.Create(ctx, makeAutomationRule(
+				cookieID, userID, "cross-trigger", "order_paid", true, 100,
+				AutomationActionInput{ActionType: "send_card", Enabled: true},
+			))
+			if err != nil {
+				t.Fatal(err)
+			}
+			base := AutomationRun{
+				RuleID: ruleID, CookieID: cookieID, ItemID: "cross-trigger",
+				OrderID: "cross-trigger-order", TriggerType: "order_paid",
+			}
+			runs := []AutomationRun{
+				{RuleID: base.RuleID, CookieID: base.CookieID, ItemID: base.ItemID, OrderID: base.OrderID, TriggerType: base.TriggerType, TriggerKey: "order_paid:event"},
+				{RuleID: base.RuleID, CookieID: base.CookieID, ItemID: base.ItemID, OrderID: base.OrderID, TriggerType: base.TriggerType, TriggerKey: "manual_delivery:cross-trigger-order"},
+			}
+			start := make(chan struct{})
+			type result struct {
+				id      int64
+				started bool
+				err     error
+			}
+			results := make(chan result, len(runs))
+			for _, run := range runs {
+				run := run
+				go func() {
+					<-start
+					id, started, startErr := target.store.Automation.TryStartRun(ctx, run)
+					results <- result{id: id, started: started, err: startErr}
+				}()
+			}
+			close(start)
+			first, second := <-results, <-results
+			if first.err != nil || second.err != nil {
+				t.Fatalf("并发领取返回错误: first=%+v second=%+v", first, second)
+			}
+			startedCount := 0
+			for _, got := range []result{first, second} {
+				if got.started {
+					startedCount++
+					if got.id <= 0 {
+						t.Fatalf("取得执行权却没有运行 ID: %+v", got)
+					}
+				} else if got.id != 0 {
+					t.Fatalf("未取得执行权不应返回运行 ID: %+v", got)
+				}
+			}
+			if startedCount != 1 {
+				t.Fatalf("同一订单只能有一条自动/人工完整发货运行，started=%d first=%+v second=%+v", startedCount, first, second)
+			}
+			var count int
+			if err := target.store.DB.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM automation_runs WHERE cookie_id=? AND order_id=? AND trigger_type='order_paid'`,
+				cookieID, base.OrderID,
+			).Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			if count != 1 {
+				t.Fatalf("同一订单实际运行数=%d，期望 1", count)
+			}
+		})
+	}
+}
