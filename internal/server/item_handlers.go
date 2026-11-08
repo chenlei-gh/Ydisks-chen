@@ -793,7 +793,6 @@ func itemImageFromDetail(detail string) string {
 	return ""
 }
 
-
 // getSinglePublishOperation 返回当前登录用户拥有的单商品发布操作状态。
 func (s *Server) getSinglePublishOperation(w http.ResponseWriter, r *http.Request) {
 	// session 保存认证中间件提供的当前用户会话。
