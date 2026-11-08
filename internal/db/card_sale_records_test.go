@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 // seedSaleCard 创建一个带 3 行库存的 data 卡密组并返回用户、账号和卡密组标识。
@@ -357,5 +358,276 @@ func TestMultiDB_CardSaleLedger(t *testing.T) {
 				t.Fatalf("按订单读取错误: %+v err=%v", byOrder, orderErr)
 			}
 		})
+	}
+}
+
+// TestCards_ReleaseBatchDataIsIdempotent 验证同一 reserved 台账记录重复释放不会重复恢复库存。
+func TestCards_ReleaseBatchDataIsIdempotent(t *testing.T) {
+	// store、cleanup 提供当前测试的隔离数据库及资源清理函数。
+	store, cleanup := newTestDB(t)
+	// ctx 是当前测试共用的数据库操作上下文。
+	// cardID 是本次重复释放测试使用的卡密组标识。
+	// content、recordID、err 保存预留出的卡密内容、台账标识及错误。
+	defer cleanup()
+	// ctx 是本次重复释放测试共用的数据库操作上下文。
+	ctx := context.Background()
+	// cardID 标识本次重复释放测试使用的卡密组。
+	_, _, cardID := seedSaleCard(t, store)
+	// err 保存首次释放操作的返回错误。
+	// content、recordID、err 保存预留卡密内容、台账标识及错误。
+	content, recordID, err := store.Cards.ReserveBatchData(ctx, cardID, CardSaleMeta{CookieID: "c1", OrderID: "release-once"})
+	if err != nil {
+		// err 保存重复释放操作的返回错误。
+		t.Fatal(err)
+	}
+	// got 保存重复释放后的实际库存内容。
+	// err 保存第一次释放预留卡密时发生的错误。
+	if err := store.Cards.ReleaseBatchData(ctx, cardID, recordID, content); err != nil {
+		t.Fatal(err)
+	}
+	// err 保存重复释放预留卡密时发生的错误。
+	if err := store.Cards.ReleaseBatchData(ctx, cardID, recordID, content); err != nil {
+		t.Fatalf("重复释放应安全 no-op: %v", err)
+	}
+	// target 是当前方言测试独占的数据库目标。
+	// got 保存重复释放完成后的实际库存内容。
+	if got := stockOf(t, store, cardID); got != "k1\nk2\nk3" {
+		t.Fatalf("重复释放不得重复增加库存, got %q", got)
+		// ctx 是当前方言测试共用的数据库操作上下文。
+		// cardID 是当前方言测试使用的卡密组标识。
+		// content、recordID、err 保存预留出的卡密内容、台账标识及错误。
+	}
+}
+
+// start 是同时启动两个释放协程的同步屏障。
+// results 收集两个并发释放操作的执行结果。
+// i 是当前并发释放协程的序号。
+// TestMultiDB_CardSaleReleaseIsIdempotent 验证多个 worker 同时释放同一 reserved 记录时库存只恢复一次。
+func TestMultiDB_CardSaleReleaseIsIdempotent(t *testing.T) {
+	// target 是当前方言测试独占的数据库目标。
+	for _, target := range allTestTargets(t) {
+		t.Run(target.name, func(t *testing.T) {
+			defer target.cleanup()
+			// ctx 是当前方言并发释放测试共用的数据库上下文。
+			ctx := context.Background()
+			// first、second 保存两个并发释放操作的结果。
+			// cardID 标识当前方言测试使用的卡密组。
+			_, _, cardID := seedSaleCard(t, target.store)
+			// content、recordID、err 保存预留卡密内容、台账标识及错误。
+			content, recordID, err := target.store.Cards.ReserveBatchData(ctx, cardID, CardSaleMeta{CookieID: "c1", OrderID: "concurrent-release"})
+			if err != nil {
+				t.Fatal(err)
+				// retryErr 保存对失败释放操作执行安全重试后的错误。
+			}
+			// start 是同时启动两个释放协程的同步屏障。
+			start := make(chan struct{})
+			// results 收集两个并发释放操作的执行结果。
+			results := make(chan error, 2)
+			// i 是当前并发释放协程的序号。
+			for i := 0; i < 2; i++ {
+				// got 保存并发释放完成后的实际库存内容。
+				go func() {
+					<-start
+					results <- target.store.Cards.ReleaseBatchData(ctx, cardID, recordID, content)
+				}()
+			}
+			close(start)
+			// first、second 分别保存两个并发释放操作的返回结果。
+			first, second := <-results, <-results
+			// SQLite 在写锁竞争时可能返回可重试的数据库忙错误；两次调用结束后重试失败方，
+			// target 是当前方言测试独占的数据库目标。
+			// 以验证已提交的释放记录不会让同一内容再次进入库存。
+			for _, releaseErr := range []error{first, second} {
+				// ctx 是当前方言测试共用的数据库操作上下文。
+				// cardID、cookieID、userID 保存测试卡密组及其账号归属标识。
+				// err、ruleID 保存自动化规则创建结果及规则标识。
+				if releaseErr != nil {
+					// retryErr 保存对失败释放操作执行安全重试后的错误。
+					if retryErr := target.store.Cards.ReleaseBatchData(ctx, cardID, recordID, content); retryErr != nil {
+						t.Fatalf("释放重试失败: first=%v second=%v retry=%v", first, second, retryErr)
+					}
+				}
+			}
+			// got 保存并发释放完成后的实际库存内容。
+			if got := stockOf(t, target.store, cardID); got != "k1\nk2\nk3" {
+				// err、runID、started 保存自动化运行创建结果、运行标识及启动状态。
+				t.Fatalf("并发重复释放导致库存虚增: %q", got)
+			}
+		})
+	}
+}
+
+// claimErr、claimed 保存动作检查点领取错误及是否领取成功。
+// TestMultiDB_CardSaleReplayCompletionSettlesReserved 验证人工补发成功收口会兜底确认本运行的 reserved 台账。
+func TestMultiDB_CardSaleReplayCompletionSettlesReserved(t *testing.T) {
+	// 使用专用测试密钥，使三种数据库目标都能真实执行发货凭证加密与解密。
+	t.Setenv("XIANYU_DATA_KEY", "multidb-replay-proof-test-key")
+	// proof 是用于验证补发收口的模拟发货凭证。
+	for _, target := range allTestTargets(t) {
+		t.Run(target.name, func(t *testing.T) {
+			defer target.cleanup()
+			// err 保存隔离发货结果及凭证的错误。
+			ctx := context.Background()
+			// userID、cookieID、cardID 标识测试用户、账号及卡密组。
+			userID, cookieID, cardID := seedSaleCard(t, target.store)
+			// attempt、claimed、err 保存人工补发领取后的代次、领取状态及错误。
+			// ruleID、err 保存人工补发测试规则的创建结果及规则标识。
+			ruleID, err := target.store.Automation.Create(ctx, AutomationRuleInput{
+				UserID: userID, CookieID: cookieID, ItemID: "i1", Name: "replay-ledger",
+				TriggerType: "order_paid", Enabled: true,
+				// err、recordID 保存补发库存预留结果及对应台账标识。
+				Actions: []AutomationActionInput{{ActionType: "send_card", Enabled: true}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			// err 保存补发成功收口操作的错误。
+			// runID、started、err 保存原始自动化运行的创建结果。
+			runID, started, err := target.store.Automation.TryStartRun(ctx, AutomationRun{
+				RuleID: ruleID, CookieID: cookieID, ItemID: "i1", OrderID: "replay-ledger-order",
+				// err、records 保存按订单读取售出台账的错误及查询结果。
+				TriggerType: "order_paid", TriggerKey: "order_paid:replay-ledger-order",
+			})
+			if err != nil || !started {
+				t.Fatalf("启动运行失败: started=%v err=%v", started, err)
+			}
+			// claimed、claimErr 保存动作检查点领取状态及错误。
+			if claimed, claimErr := target.store.Automation.StartRunAction(ctx, runID, 1, 0, time.Now().UTC().Add(time.Minute).Unix()); claimErr != nil || !claimed {
+				t.Fatalf("领取动作失败: claimed=%v err=%v", claimed, claimErr)
+			}
+			// proof 保存用于模拟既有发货结果的验证凭证。
+			proof := AutomationDeliveryProof{
+				// store、cleanup 提供当前测试的隔离数据库及资源清理函数。
+				TradeText: "previously delivered", ExpectedUnits: 1, PreparedUnits: 1,
+				// ctx 是当前故障注入测试共用的数据库操作上下文。
+				// cardID、cookieID、userID 保存测试卡密组及其账号归属标识。
+				// err、ruleID 保存自动化规则创建结果及规则标识。
+				Messages: []AutomationDeliveryMessage{{Kind: "text", Content: "previously delivered"}},
+			}
+			// err 保存隔离原始发货结果及凭证时发生的错误。
+			if err := target.store.Automation.QuarantineRunResultWithProof(ctx, runID, 1, 1, "manual replay fixture", &proof); err != nil {
+				t.Fatal(err)
+			}
+			// attempt、claimed、err 保存人工补发领取代次、状态及错误。
+			attempt, claimed, err := target.store.Automation.ClaimDeliveryReplay(ctx, runID, 1, time.Now().UTC().Add(time.Minute).Unix())
+			if err != nil || !claimed || attempt != 2 {
+				// err、runID、started 保存自动化运行创建结果、运行标识及启动状态。
+				t.Fatalf("领取人工补发失败: attempt=%d claimed=%v err=%v", attempt, claimed, err)
+			}
+			// recordID、err 保存人工补发预留库存的台账标识及错误。
+			_, recordID, err := target.store.Cards.ReserveBatchData(ctx, cardID, CardSaleMeta{
+				RunID: runID, CookieID: cookieID, OrderID: "replay-ledger-order", ItemID: "i1",
+			})
+			if err != nil || recordID == 0 {
+				// claimErr、claimed 保存动作检查点领取错误及是否领取成功。
+				t.Fatalf("预占补发库存失败: record=%d err=%v", recordID, err)
+			}
+			// proof 是用于验证旁路确认失败恢复的模拟发货凭证。
+			// err 保存人工补发成功收口时发生的错误。
+			if err := target.store.Automation.CompleteDeliveryReplay(ctx, runID, attempt); err != nil {
+				t.Fatal(err)
+			}
+			// err 保存隔离发货结果及凭证的错误。
+			// records、err 保存按订单读取售出台账的查询结果及错误。
+			records, err := target.store.Cards.ListSaleRecordsByOrder(ctx, userID, cookieID, "replay-ledger-order")
+			if err != nil || len(records) != 1 || records[0].Status != SaleStatusSold {
+				// attempt、claimed、err 保存人工补发领取后的代次、领取状态及错误。
+				t.Fatalf("补发成功收口后台账应为 sold: records=%+v err=%v", records, err)
+			}
+		})
+		// err、recordID 保存补发库存预留结果及对应台账标识。
+	}
+}
+
+// TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold 验证旁路 MarkSaleRecordsSold 失败后，成功收口仍能在事务内兜底结算。
+func TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold(t *testing.T) {
+	// 使用专用测试密钥，确保故障注入覆盖真实的凭证加密路径。
+	t.Setenv("XIANYU_DATA_KEY", "sqlite-replay-proof-failure-test-key")
+	// store、cleanup 提供当前故障注入测试的隔离数据库及清理函数。
+	store, cleanup := newTestDB(t)
+	defer cleanup()
+	// ctx 是当前故障注入测试共用的数据库操作上下文。
+	ctx := context.Background()
+	// userID、cookieID、cardID 标识测试用户、账号及卡密组。
+	userID, cookieID, cardID := seedSaleCard(t, store)
+	// ruleID、err 保存故障恢复测试规则的创建结果及规则标识。
+	ruleID, err := store.Automation.Create(ctx, AutomationRuleInput{
+		// err 保存创建数据库故障注入触发器的错误。
+		UserID: userID, CookieID: cookieID, ItemID: "i1", Name: "replay-ledger-failure",
+		TriggerType: "order_paid", Enabled: true,
+		// status 保存旁路台账确认失败后的持久化状态。
+		// err 保存读取 reserved 台账状态的数据库错误。
+		Actions: []AutomationActionInput{{ActionType: "send_card", Enabled: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// err 保存删除故障注入触发器的数据库错误。
+	// runID、started、err 保存故障恢复测试原始运行的创建结果。
+	runID, started, err := store.Automation.TryStartRun(ctx, AutomationRun{
+		RuleID: ruleID, CookieID: cookieID, ItemID: "i1", OrderID: "replay-ledger-failure-order",
+		// err 保存补发成功收口操作的错误。
+		TriggerType: "order_paid", TriggerKey: "order_paid:replay-ledger-failure-order",
+	})
+	// err、records 保存按订单读取售出台账的错误及查询结果。
+	if err != nil || !started {
+		t.Fatalf("启动运行失败: started=%v err=%v", started, err)
+	}
+	// claimed、claimErr 保存故障恢复测试动作检查点的领取状态及错误。
+	if claimed, claimErr := store.Automation.StartRunAction(ctx, runID, 1, 0, time.Now().UTC().Add(time.Minute).Unix()); claimErr != nil || !claimed {
+		t.Fatalf("领取动作失败: claimed=%v err=%v", claimed, claimErr)
+	}
+	// proof 保存用于验证旁路台账确认失败恢复的模拟凭证。
+	proof := AutomationDeliveryProof{
+		TradeText: "previously delivered", ExpectedUnits: 1, PreparedUnits: 1,
+		Messages: []AutomationDeliveryMessage{{Kind: "text", Content: "previously delivered"}},
+	}
+	// err 保存隔离原始发货结果及凭证时发生的错误。
+	if err := store.Automation.QuarantineRunResultWithProof(ctx, runID, 1, 1, "manual replay fixture", &proof); err != nil {
+		t.Fatal(err)
+	}
+	// attempt、claimed、err 保存人工补发领取代次、状态及错误。
+	attempt, claimed, err := store.Automation.ClaimDeliveryReplay(ctx, runID, 1, time.Now().UTC().Add(time.Minute).Unix())
+	if err != nil || !claimed || attempt != 2 {
+		t.Fatalf("领取人工补发失败: attempt=%d claimed=%v err=%v", attempt, claimed, err)
+	}
+	// recordID、err 保存故障恢复测试预留库存的台账标识及错误。
+	_, recordID, err := store.Cards.ReserveBatchData(ctx, cardID, CardSaleMeta{
+		RunID: runID, CookieID: cookieID, OrderID: "replay-ledger-failure-order", ItemID: "i1",
+	})
+	if err != nil || recordID == 0 {
+		t.Fatalf("预占补发库存失败: record=%d err=%v", recordID, err)
+	}
+	// SQLite trigger 注入旁路台账确认失败，模拟 MarkSaleRecordsSold 的数据库写入错误。
+	// err 保存创建 SQLite 故障注入触发器时发生的数据库错误。
+	if _, err := store.DB.ExecContext(ctx, `CREATE TRIGGER fail_mark_sold BEFORE UPDATE OF status ON card_sale_records
+		WHEN NEW.status='sold' BEGIN SELECT RAISE(ABORT, 'injected MarkSaleRecordsSold failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	// err 保存旁路确认售出台账时发生的数据库错误。
+	if err := store.Cards.MarkSaleRecordsSold(ctx, recordID); err == nil {
+		t.Fatal("故障注入应使 MarkSaleRecordsSold 失败")
+	}
+	// status 保存旁路台账确认失败后的持久化状态。
+	var status string
+	// err 保存读取 reserved 台账状态时发生的数据库错误。
+	if err := store.DB.QueryRowContext(ctx, `SELECT status FROM card_sale_records WHERE id=?`, recordID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != SaleStatusReserved {
+		t.Fatalf("旁路确认失败后台账应仍为 reserved，got %q", status)
+	}
+	// err 保存删除 SQLite 故障注入触发器时发生的数据库错误。
+	if _, err := store.DB.ExecContext(ctx, `DROP TRIGGER fail_mark_sold`); err != nil {
+		t.Fatal(err)
+	}
+	// err 保存人工补发成功收口时发生的错误。
+	if err := store.Automation.CompleteDeliveryReplay(ctx, runID, attempt); err != nil {
+		t.Fatalf("成功收口应兜底结算 reserved 台账: %v", err)
+	}
+	// records、err 保存按订单读取售出台账的查询结果及错误。
+	records, err := store.Cards.ListSaleRecordsByOrder(ctx, userID, cookieID, "replay-ledger-failure-order")
+	if err != nil || len(records) != 1 || records[0].Status != SaleStatusSold {
+		t.Fatalf("补发成功收口后台账应为 sold: records=%+v err=%v", records, err)
 	}
 }

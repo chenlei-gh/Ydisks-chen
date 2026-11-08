@@ -97,10 +97,15 @@ func TestRefreshRunnerRecoveryCallbackOnIntervalError(t *testing.T) {
 	// repository 保存首轮恢复查询错误。
 	repository := completeAppliedRepository()
 	repository.recoverErr = errors.New("恢复扫描失败")
-	// callbackDone 保存错误回调完成信号。
+	// callbackDone 保存错误回调完成信号；非阻塞回调避免后台轮询耗尽缓冲区后卡住关闭流程。
 	callbackDone := make(chan struct{}, 1)
 	// runner 保存极短轮询间隔的恢复运行器。
-	runner, err := NewRefreshJobRunner(repository, &refreshRunnerTestRefresher{}, RefreshJobRunnerOptions{RecoveryInterval: time.Millisecond, OnRecoveryError: func(error) { callbackDone <- struct{}{} }})
+	runner, err := NewRefreshJobRunner(repository, &refreshRunnerTestRefresher{}, RefreshJobRunnerOptions{RecoveryInterval: time.Millisecond, OnRecoveryError: func(error) {
+		select {
+		case callbackDone <- struct{}{}:
+		default:
+		}
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +122,12 @@ func TestRefreshRunnerRecoveryCallbackOnIntervalError(t *testing.T) {
 	// intervalCallbackDone 保存定时器触发的第二次错误回调，区分启动时的立即扫描。
 	intervalCallbackDone := make(chan struct{}, 1)
 	// intervalRunner 保存专门验证 ticker 分支的恢复运行器。
-	intervalRunner, err := NewRefreshJobRunner(repository, &refreshRunnerTestRefresher{}, RefreshJobRunnerOptions{RecoveryInterval: time.Millisecond, OnRecoveryError: func(error) { intervalCallbackDone <- struct{}{} }})
+	intervalRunner, err := NewRefreshJobRunner(repository, &refreshRunnerTestRefresher{}, RefreshJobRunnerOptions{RecoveryInterval: time.Millisecond, OnRecoveryError: func(error) {
+		select {
+		case intervalCallbackDone <- struct{}{}:
+		default:
+		}
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
