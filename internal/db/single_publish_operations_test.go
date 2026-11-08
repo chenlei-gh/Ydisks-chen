@@ -24,7 +24,7 @@ func TestSinglePublishOperationsStateTransitions(t *testing.T) {
 	operation := SinglePublishOperation{
 		OperationID: "single-publish-state-transition-1", UserID: 7, CookieID: "account-7",
 		RequestFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		State: "prepared",
+		State:              "prepared",
 	}
 	if createErr := repository.CreatePrepared(context.Background(), operation); createErr != nil {
 		t.Fatalf("CreatePrepared: %v", createErr)
