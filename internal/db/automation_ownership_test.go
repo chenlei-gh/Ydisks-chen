@@ -226,8 +226,11 @@ func TestMultiDB_AutomationPaidRunCrossTriggerConcurrency(t *testing.T) {
 // cookieID、userID 保存自动化规则所属账号及用户标识。
 // err、ruleID 保存自动化规则创建结果及规则标识。
 			defer target.cleanup()
+// ctx 是当前方言测试共用的数据库操作上下文。
 			ctx := context.Background()
+// userID、cookieID 标识本次竞争测试的用户与账号。
 			userID, cookieID := seedAccount(t, target.store)
+// ruleID、err 保存自动化规则创建结果及规则标识。
 			ruleID, err := target.store.Automation.Create(ctx, makeAutomationRule(
 				cookieID, userID, "cross-trigger", "order_paid", true, 100,
 				AutomationActionInput{ActionType: "send_card", Enabled: true},
@@ -237,12 +240,14 @@ func TestMultiDB_AutomationPaidRunCrossTriggerConcurrency(t *testing.T) {
 				t.Fatal(err)
 // runs 保存自动触发与人工完整发货对应的竞争运行请求。
 			}
+// base 保存自动触发与人工发货共用的订单运行参数。
 			base := AutomationRun{
 				RuleID: ruleID, CookieID: cookieID, ItemID: "cross-trigger",
 // start 是同时启动两个竞争请求的同步屏障。
 // result 保存单个竞争请求的运行标识、领取状态及错误。
 				OrderID: "cross-trigger-order", TriggerType: "order_paid",
 			}
+// runs 保存同一订单的自动触发和人工发货请求。
 			runs := []AutomationRun{
 				{RuleID: base.RuleID, CookieID: base.CookieID, ItemID: base.ItemID, OrderID: base.OrderID, TriggerType: base.TriggerType, TriggerKey: "order_paid:event"},
 // results 收集两个竞争请求的执行结果。
@@ -252,31 +257,38 @@ func TestMultiDB_AutomationPaidRunCrossTriggerConcurrency(t *testing.T) {
 			}
 // id、started、startErr 保存本次运行领取结果及错误。
 			start := make(chan struct{})
+// result 汇总单个竞争请求的运行标识、领取状态和错误。
 			type result struct {
 				id      int64
 				started bool
 // first、second 保存两个竞争请求的返回结果。
 				err     error
 			}
+// results 收集两个竞争请求的并发执行结果。
 			results := make(chan result, len(runs))
 // startedCount 统计成功取得执行权的竞争请求数量。
 // got 是当前待检查的并发领取结果。
 			for _, run := range runs {
+// run 是当前循环中交给协程执行的请求副本。
 				run := run
 				go func() {
 					<-start
+// id、started、startErr 保存本次运行领取结果及错误。
 					id, started, startErr := target.store.Automation.TryStartRun(ctx, run)
 					results <- result{id: id, started: started, err: startErr}
 				}()
 			}
 			close(start)
+// first、second 分别保存两个竞争请求的返回结果。
 			first, second := <-results, <-results
 			if first.err != nil || second.err != nil {
 				t.Fatalf("并发领取返回错误: first=%+v second=%+v", first, second)
 // count 保存同一订单实际创建的运行记录数量。
 // err 保存查询同一订单运行记录数量的数据库错误。
 			}
+// startedCount 统计成功取得订单执行权的请求数量。
 			startedCount := 0
+// got 是当前待验证的并发领取结果。
 			for _, got := range []result{first, second} {
 				if got.started {
 					startedCount++
@@ -290,7 +302,9 @@ func TestMultiDB_AutomationPaidRunCrossTriggerConcurrency(t *testing.T) {
 			if startedCount != 1 {
 				t.Fatalf("同一订单只能有一条自动/人工完整发货运行，started=%d first=%+v second=%+v", startedCount, first, second)
 			}
+// count 保存数据库中该订单实际创建的运行记录数。
 			var count int
+// err 保存查询订单运行记录数量时发生的数据库错误。
 			if err := target.store.DB.QueryRowContext(ctx,
 				`SELECT COUNT(*) FROM automation_runs WHERE cookie_id=? AND order_id=? AND trigger_type='order_paid'`,
 				cookieID, base.OrderID,
