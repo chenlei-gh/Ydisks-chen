@@ -32,7 +32,7 @@
 - `b4c93a70e1dd1995470a207526278037c19cd5d5`：库存释放幂等修复。
 - `b31888978f64784661d6883314490c29ebf84a9a`：人工补发收口结算修复。
 - `63e69f30ecdd6bc939ae06a72267aaca3f796888`：库存重复/并发释放与补发台账结算回归测试。
-- 当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)，draft，未合并。
+- 当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)，open、ready for review，未合并。
 
 **验证状态**：尝试在本地克隆仓库时，运行环境无法解析 `github.com`，因此没有本地测试结果。PR 创建后暂未观察到 GitHub Actions workflow run 或 commit status；不能声称 CI 已启动或通过。后续以 PR 实际检查结果为准。
 
@@ -136,7 +136,7 @@
 **影响**：库存虚增，后续可能把同一张卡密售给多个订单。  
 **最小修复方向**：在同一事务内先以条件状态迁移/领取 reserved 台账，确认恰好影响一行后再修改库存；或先锁定并校验台账，再执行库存 CAS，保证重复释放不会再改库存。不能只在调用方增加进程内 mutex。需要 SQLite、MySQL、PostgreSQL 三方言并发/重复调用测试。
 
-现有测试 `TestCards_ReleaseBatchDataRestoresStockAndDeletesRecord` 只验证单次释放，没有重复调用或并发释放断言。
+原有测试 `TestCards_ReleaseBatchDataRestoresStockAndDeletesRecord` 只验证单次释放。审计后新增 `TestCards_ReleaseBatchDataIsIdempotent` 与 `TestMultiDB_CardSaleReleaseIsIdempotent` 覆盖重复调用和多方言并发释放；目前仅有测试代码，尚无运行结果。
 
 ### P1：人工补发成功收口缺少 reserved 台账兜底结算
 
@@ -145,7 +145,7 @@
 - 随后 `replayDeliveryProof` 调用 `CompleteDeliveryReplay`；该方法只更新 `automation_runs` 状态，没有像 `FinishRun` 一样结算该 run 的 reserved 台账。
 
 **影响**：人工补发实际成功但台账状态仍为 reserved，售出统计低估，异常台账长期残留。  
-**最小修复方向**：让 `CompleteDeliveryReplay` 在同一事务中执行运行终态更新与 reserved 台账结算，复用明确的终态收口语义；添加注入 `MarkSaleRecordsSold` 失败后仍由成功收口兜底的测试。
+**最小修复方向**：已让 `CompleteDeliveryReplay` 在同一事务中执行运行终态更新与 reserved 台账结算，复用 `finishRunTail`。已新增 `TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold`，通过 SQLite trigger 注入 `MarkSaleRecordsSold` 失败，再验证成功收口兜底结算；测试尚未运行。
 
 ## 8. unknown / needs_review 的持久化与人工入口（1.7）
 
@@ -183,16 +183,16 @@
 - CI 还执行 `go test ./...`、server race 子集和真实服务二进制 + 临时 SQLite smoke。
 
 **覆盖缺口**：
-- 没有重复/并发调用 `ReleaseBatchData` 的测试。
-- 没有人工补发路径中 `MarkSaleRecordsSold` 失败后由 `CompleteDeliveryReplay` 兜底结算的测试。
+- 重复/并发调用 `ReleaseBatchData` 的测试已新增，但尚未运行。
+- 已新增 SQLite 故障注入测试，验证 `MarkSaleRecordsSold` 失败后由 `CompleteDeliveryReplay` 兜底结算；尚未运行，且该故障注入仅覆盖 SQLite。
 - 自动/人工不同 trigger key 的真正同时竞争测试已新增，但尚无执行结果；需等待 CI 运行确认。
 - 本次未运行 Go 测试，也没有本开发分支的 CI 结果；测试文件存在不代表通过。
 - 没有闲鱼真实账号/订单的平台 E2E 证据。
 
 ## 10. 最小修复顺序建议
 
-1. **先修复 `ReleaseBatchData` 的单记录单次释放约束**，添加重复调用与并发竞争回归测试，覆盖 SQLite、MySQL、PostgreSQL。
-2. 修复 `CompleteDeliveryReplay` 成功收口时 reserved 台账结算，补充故障注入测试。
+1. **已完成代码修复** `ReleaseBatchData` 的单记录单次释放约束，并添加重复调用与多方言并发竞争回归测试；等待 CI 运行。
+2. **已完成代码修复** `CompleteDeliveryReplay` 成功收口时 reserved 台账结算；新增 SQLite 故障注入测试，等待运行。
 3. 已添加自动发货与人工完整发货不同 trigger key 的真实并发领取测试（至少覆盖所有 CI 方言）；待 CI 执行确认。
 4. 对人工补发逐消息重复发送行为明确产品语义；若要求失败后不重发已确认成功的消息，再设计逐消息持久化进度，不要只加内存游标。
 5. 保留“远端未知结果必须人工核对”的现有安全边界；未证明平台幂等能力前不引入自动盲重试。
