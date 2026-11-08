@@ -14,6 +14,7 @@ import (
 func newSinglePublishOperationID() (string, error) {
 	// random 保存本次操作 ID 的密码学随机字节。
 	var random [16]byte
+	// err 保存生成随机操作 ID 时的系统随机源错误。
 	if _, err := rand.Read(random[:]); err != nil {
 		return "", fmt.Errorf("生成商品发布操作 ID 失败: %w", err)
 	}
@@ -24,6 +25,7 @@ func newSinglePublishOperationID() (string, error) {
 func fingerprintSinglePublishRequest(input itemapp.PublishInput) (string, error) {
 	// imageHashes 保存商品图片的内容哈希，不保存图片内容到操作账本。
 	imageHashes := make([]string, 0, len(input.Images))
+	// image 表示当前参与商品主图指纹计算的图片。
 	for _, image := range input.Images {
 		// digest 保存单张图片内容的 SHA-256。
 		digest := sha256.Sum256(image.Data)
@@ -31,6 +33,7 @@ func fingerprintSinglePublishRequest(input itemapp.PublishInput) (string, error)
 	}
 	// specImageHashes 保存规格图片内容哈希。
 	specImageHashes := make([]string, 0, len(input.SpecImages))
+	// image 表示当前参与规格图片指纹计算的图片。
 	for _, image := range input.SpecImages {
 		// digest 保存当前规格图片内容的 SHA-256。
 		digest := sha256.Sum256(image.Data)
@@ -59,7 +62,7 @@ func fingerprintSinglePublishRequest(input itemapp.PublishInput) (string, error)
 		Location: input.Location, Category: input.Category, Images: imageHashes,
 		Specs: input.Specs, SKUs: input.SKUs, SpecImages: specImageHashes,
 	}
-	// encoded 保存规范化请求的 JSON 字节。
+	// encoded、err 保存规范化请求的 JSON 字节及序列化错误。
 	encoded, err := json.Marshal(canonical)
 	if err != nil {
 		return "", fmt.Errorf("规范化商品发布请求失败: %w", err)
