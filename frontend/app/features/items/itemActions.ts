@@ -190,7 +190,7 @@ const getOrCreateSinglePublishOperationID = async (
   try {
     existingRaw = window.sessionStorage.getItem(storageKey);
   } catch {
-    // 浏览器不允许会话存储时，后续仅能生成本次唯一 ID，不能承诺刷新恢复。
+    throw new Error('浏览器会话存储不可用，无法安全复用商品发布操作 ID；请启用会话存储后重试。');
   }
   if (existingRaw) {
     // existing 保存当前账号上一次操作 ID 及其请求指纹。
@@ -214,7 +214,7 @@ const getOrCreateSinglePublishOperationID = async (
   try {
     window.sessionStorage.setItem(storageKey, JSON.stringify({ operationID, fingerprint: digestHex }));
   } catch {
-    // 会话存储写入失败时仍可完成本次请求，但刷新后不能恢复相同 ID。
+    throw new Error('无法持久化商品发布操作 ID；为避免重复创建，已阻止本次发布。');
   }
   return operationID;
 };
