@@ -201,5 +201,5 @@
 
 - 第一阶段审计先完成报告，再按报告进入最小修复；修复提交已在 1.1 节列明。
 - 本次 GitHub 代码读取与测试结构检查不等于运行测试；本地运行环境无法解析 `github.com`，目前没有本地 Go 测试结果。
-- Draft PR #1 尚未出现可见 GitHub Actions workflow run 或 commit status；不得把“PR 已创建”描述为“CI 已通过”。
+- PR #1（open，ready for review） 尚未出现可见 GitHub Actions workflow run 或 commit status；不得把“PR 已创建”描述为“CI 已通过”。
 - 本轮不在真实买家、真实订单或真实账号上执行发货/补发。
