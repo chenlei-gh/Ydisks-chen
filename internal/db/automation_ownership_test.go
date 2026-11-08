@@ -217,7 +217,6 @@ func TestAutomationOwnershipWriteFailureRollsBack(t *testing.T) {
 	}
 }
 
-
 // TestMultiDB_AutomationPaidRunCrossTriggerConcurrency 验证自动事件与人工完整发货同时竞争同一订单时只能创建一条运行。
 func TestMultiDB_AutomationPaidRunCrossTriggerConcurrency(t *testing.T) {
 	for _, target := range allTestTargets(t) {
