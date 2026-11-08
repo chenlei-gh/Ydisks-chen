@@ -12,10 +12,14 @@ import (
 
 // singlePublishOperationResponse 是单商品发布状态查询的稳定 HTTP 响应 DTO。
 type singlePublishOperationResponse struct {
+	// OperationID 是当前用户查询的发布操作标识。
 	OperationID string `json:"operation_id"`
-	State       string `json:"state"`
-	ItemID      string `json:"item_id"`
-	ItemURL     string `json:"item_url"`
+	// State 是持久化账本中的当前发布阶段。
+	State string `json:"state"`
+	// ItemID 是平台确认成功后返回的商品 ID。
+	ItemID string `json:"item_id"`
+	// ItemURL 是平台确认成功后返回的商品链接。
+	ItemURL string `json:"item_url"`
 }
 
 // prepareSinglePublishOperation 为单商品发布请求补齐稳定操作 ID 和服务端内容指纹。
