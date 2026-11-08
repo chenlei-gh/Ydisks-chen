@@ -181,24 +181,51 @@ const getOrCreateSinglePublishOperationID = async (
   });
   // requestDigest 是当前完整表单的 SHA-256，用于隔离不同内容的发布操作。
   const requestDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
-  // digestHex 是会话存储键使用的十六进制指纹。
+  // digestHex 是当前完整表单的十六进制指纹。
   const digestHex = Array.from(new Uint8Array(requestDigest)).map(/* byte 表示请求指纹摘要中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
-  // storageKey 按账号和请求指纹隔离，浏览器刷新后仍可恢复同一操作 ID。
-  const storageKey = 'ydisks.single-publish.' + encodeURIComponent(form.cookie_id) + '.' + digestHex;
+  // storageKey 按账号保存当前未收口操作，避免用户修改表单后绕过未知结果隔离。
+  const storageKey = 'ydisks.single-publish.active.' + encodeURIComponent(form.cookie_id);
   try {
-    // existingID 保存相同表单之前生成的操作 ID。
-    const existingID = window.sessionStorage.getItem(storageKey);
-    if (existingID) return existingID;
+    // existingRaw 保存当前账号上一次尚未清理的操作记录。
+    const existingRaw = window.sessionStorage.getItem(storageKey);
+    if (existingRaw) {
+      // existing 保存当前账号上一次操作 ID 及其请求指纹。
+      const existing = JSON.parse(existingRaw) as { operationID?: string; fingerprint?: string };
+      if (existing.operationID && existing.fingerprint === digestHex) return existing.operationID;
+      if (existing.operationID) {
+        // previousOperation 保存上一次发布的服务端状态，判断是否允许开始不同内容的新发布。
+        const previousOperation = await getSinglePublishOperation(existing.operationID);
+        if (!['prepared', 'local_confirmed'].includes(previousOperation.state)) {
+          throw new Error('上一条商品发布操作仍未安全收口。请恢复原表单并查询原操作状态，不要用不同内容开始新发布。');
+        }
+      }
+    }
     // random 保存新操作 ID 的密码学随机字节。
     const random = crypto.getRandomValues(new Uint8Array(16));
     // operationID 是本次发布的稳定随机标识。
     const operationID = Array.from(random).map(/* byte 表示随机操作 ID 中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
-    window.sessionStorage.setItem(storageKey, operationID);
+    window.sessionStorage.setItem(storageKey, JSON.stringify({ operationID, fingerprint: digestHex }));
     return operationID;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('上一条商品发布操作仍未安全收口')) throw error;
     // storage 不可用时仍生成唯一 ID；该降级不会伪称具备刷新恢复能力。
     const random = crypto.getRandomValues(new Uint8Array(16));
-    return Array.from(random).map(value => value.toString(16).padStart(2, '0')).join('');
+    return Array.from(random).map(/* byte 表示随机操作 ID 中的单个字节。 */ byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+};
+
+// clearSinglePublishOperationID 仅在当前操作成功收口后清理会话存储中的活动操作标识。
+const clearSinglePublishOperationID = (cookieID: string, operationID: string): void => {
+  // storageKey 是当前账号的活动操作记录键。
+  const storageKey = 'ydisks.single-publish.active.' + encodeURIComponent(cookieID);
+  try {
+    // stored 保存会话存储中的活动操作记录。
+    const stored = window.sessionStorage.getItem(storageKey);
+    if (stored && (JSON.parse(stored) as { operationID?: string }).operationID === operationID) {
+      window.sessionStorage.removeItem(storageKey);
+    }
+  } catch {
+    // 会话存储清理失败不改变服务端已经确认的发布状态。
   }
 };
 
@@ -399,6 +426,7 @@ export const useItemActions = ({ selectedAccount, setSelectedAccount, setItems, 
       // result 保存平台发布接口返回的商品信息。
       const result = await publishItem({ ...publishForm, operation_id: operationID, quantity: totalQuantity, location: publishLocation || undefined, category: publishCategory || undefined });
       await loadItems();
+      clearSinglePublishOperationID(publishForm.cookie_id, operationID);
       setShowPublishModal(false);
       setPublishForm(emptyPublishItemForm(selectedAccount || ''));
       setPublishCategoryKeyword('');
