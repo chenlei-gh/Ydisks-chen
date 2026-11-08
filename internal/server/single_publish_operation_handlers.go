@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -75,4 +76,36 @@ func (s *Server) getSinglePublishOperation(w http.ResponseWriter, r *http.Reques
 		ItemID:      operation.ItemID,
 		ItemURL:     operation.ItemURL,
 	})
+}
+
+
+// writeSinglePublishCallError 将应用层单商品发布错误映射为稳定的 HTTP 错误响应。
+func (s *Server) writeSinglePublishCallError(w http.ResponseWriter, cookieID string, callErr error) {
+	// publishErr 保存可映射为专用 HTTP 状态码的应用层发布错误。
+	var publishErr *items.PublishError
+	if errors.As(callErr, &publishErr) {
+		// status 保存专用发布错误对应的 HTTP 状态码。
+		status := http.StatusBadGateway
+		// message 保存面向用户的发布错误说明。
+		message := publishErr.Error()
+		if publishErr.Code == items.PublishErrorStockPermissionMissing {
+			status = http.StatusForbidden
+			message = "该账号没有库存发布权限，无法按库存数量发布商品"
+		}
+		writeErrCode(w, status, string(publishErr.Code), message, "")
+		return
+	}
+	if strings.Contains(callErr.Error(), "账号凭证已变化") {
+		writeErr(w, http.StatusConflict, callErr.Error())
+		return
+	}
+	// message 保存未包装的平台或基础设施错误，避免前端误报发布成功。
+	message := strings.TrimSpace(callErr.Error())
+	if message == "" {
+		message = "商品发布失败"
+	}
+	if s.Logger != nil {
+		s.Logger.Error("商品发布失败", "cookie_id", cookieID, "err", callErr)
+	}
+	writeErrCode(w, http.StatusBadGateway, "publish_failed", message, "")
 }
