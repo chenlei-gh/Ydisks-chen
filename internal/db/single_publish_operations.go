@@ -87,19 +87,29 @@ func (repository *SinglePublishOperations) MarkStarted(ctx context.Context, user
 }
 
 // MarkRemoteConfirmed 保存平台已确认的商品结果，供进程重启后只执行本地收尾。
-func (repository *SinglePublishOperations) MarkRemoteConfirmed(ctx context.Context, userID int64, operationID, itemID, itemURL, rawJSON string) error {
+func (repository *SinglePublishOperations) MarkRemoteConfirmed(ctx context.Context, userID int64, operationID, itemID, itemURL, rawJSON string, message ...string) error {
 	if strings.TrimSpace(itemID) == "" {
 		return errors.New("平台确认结果缺少商品 ID")
 	}
 	if strings.TrimSpace(rawJSON) == "" {
 		rawJSON = "{}"
 	}
-	return repository.transition(ctx, userID, operationID, "started", "remote_confirmed", itemID, itemURL, rawJSON, "")
+	// errorMessage 保存平台响应 Cookie 写回失败等非商品创建错误，供恢复时继续提示。
+	errorMessage := ""
+	if len(message) > 0 {
+		errorMessage = message[0]
+	}
+	return repository.transition(ctx, userID, operationID, "started", "remote_confirmed", itemID, itemURL, rawJSON, errorMessage)
 }
 
 // MarkLocalConfirmed 标记本地商品记录已成功收口。
-func (repository *SinglePublishOperations) MarkLocalConfirmed(ctx context.Context, userID int64, operationID string) error {
-	return repository.transition(ctx, userID, operationID, "remote_confirmed", "local_confirmed", "", "", "{}", "")
+func (repository *SinglePublishOperations) MarkLocalConfirmed(ctx context.Context, userID int64, operationID string, message ...string) error {
+	// errorMessage 保存本地收口后仍需向用户呈现的 Cookie 持久化问题。
+	errorMessage := ""
+	if len(message) > 0 {
+		errorMessage = message[0]
+	}
+	return repository.transition(ctx, userID, operationID, "remote_confirmed", "local_confirmed", "", "", "{}", errorMessage)
 }
 
 // MarkUnknown 隔离无法确认远端结果的 started 操作，禁止自动重新发布。
@@ -118,9 +128,9 @@ func (repository *SinglePublishOperations) transition(ctx context.Context, userI
 		 SET state=?,item_id=CASE WHEN ?='' THEN item_id ELSE ? END,
 		     item_url=CASE WHEN ?='' THEN item_url ELSE ? END,
 		     raw_json=CASE WHEN ?='{}' THEN raw_json ELSE ? END,
-		     error_message=?,updated_at=CURRENT_TIMESTAMP
+		     error_message=CASE WHEN ?='' THEN error_message ELSE ? END,updated_at=CURRENT_TIMESTAMP
 		 WHERE operation_id=? AND user_id=? AND state=?`,
-		to, itemID, itemID, itemURL, itemURL, rawJSON, rawJSON, message,
+		to, itemID, itemID, itemURL, itemURL, rawJSON, rawJSON, message, message,
 		strings.TrimSpace(operationID), userID, from)
 	if err != nil {
 		return err
