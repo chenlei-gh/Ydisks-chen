@@ -50,6 +50,7 @@ func (repository *SinglePublishOperations) CreatePrepared(ctx context.Context, o
 	if operation.State != "prepared" {
 		return errors.New("新建单商品发布操作必须处于 prepared 状态")
 	}
+	// err 保存创建 prepared 操作记录的数据库错误。
 	_, err := repository.DB.ExecContext(ctx,
 		`INSERT INTO single_publish_operations
 		 (operation_id,user_id,cookie_id,request_fingerprint,state,item_id,item_url,raw_json,error_message)
@@ -64,7 +65,9 @@ func (repository *SinglePublishOperations) GetForUser(ctx context.Context, userI
 	if repository == nil || repository.DB == nil {
 		return SinglePublishOperation{}, errors.New("单商品发布操作存储未初始化")
 	}
+	// operation 保存当前用户可见的单商品发布操作快照。
 	var operation SinglePublishOperation
+	// err 保存按用户和操作 ID 查询记录的数据库错误。
 	err := repository.DB.QueryRowContext(ctx,
 		`SELECT operation_id,user_id,cookie_id,request_fingerprint,state,item_id,item_url,raw_json,error_message,created_at,updated_at
 		 FROM single_publish_operations WHERE operation_id=? AND user_id=?`,
@@ -109,6 +112,7 @@ func (repository *SinglePublishOperations) transition(ctx context.Context, userI
 	if repository == nil || repository.DB == nil {
 		return errors.New("单商品发布操作存储未初始化")
 	}
+	// result、err 保存状态条件更新结果及数据库错误。
 	result, err := repository.DB.ExecContext(ctx,
 		`UPDATE single_publish_operations
 		 SET state=?,item_id=CASE WHEN ?='' THEN item_id ELSE ? END,
@@ -121,6 +125,7 @@ func (repository *SinglePublishOperations) transition(ctx context.Context, userI
 	if err != nil {
 		return err
 	}
+	// affected、err 保存实际迁移行数及读取行数失败原因。
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return err
