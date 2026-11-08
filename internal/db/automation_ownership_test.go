@@ -219,33 +219,48 @@ func TestAutomationOwnershipWriteFailureRollsBack(t *testing.T) {
 
 // TestMultiDB_AutomationPaidRunCrossTriggerConcurrency 验证自动事件与人工完整发货同时竞争同一订单时只能创建一条运行。
 func TestMultiDB_AutomationPaidRunCrossTriggerConcurrency(t *testing.T) {
+// target 是当前方言测试独占的数据库目标。
 	for _, target := range allTestTargets(t) {
 		t.Run(target.name, func(t *testing.T) {
+// ctx 是当前方言测试共用的数据库操作上下文。
+// cookieID、userID 保存自动化规则所属账号及用户标识。
+// err、ruleID 保存自动化规则创建结果及规则标识。
 			defer target.cleanup()
 			ctx := context.Background()
 			userID, cookieID := seedAccount(t, target.store)
 			ruleID, err := target.store.Automation.Create(ctx, makeAutomationRule(
 				cookieID, userID, "cross-trigger", "order_paid", true, 100,
 				AutomationActionInput{ActionType: "send_card", Enabled: true},
+// base 保存两种触发方式共同使用的订单和规则上下文。
 			))
 			if err != nil {
 				t.Fatal(err)
+// runs 保存自动触发与人工完整发货对应的竞争运行请求。
 			}
 			base := AutomationRun{
 				RuleID: ruleID, CookieID: cookieID, ItemID: "cross-trigger",
+// start 是同时启动两个竞争请求的同步屏障。
+// result 保存单个竞争请求的运行标识、领取状态及错误。
 				OrderID: "cross-trigger-order", TriggerType: "order_paid",
 			}
 			runs := []AutomationRun{
 				{RuleID: base.RuleID, CookieID: base.CookieID, ItemID: base.ItemID, OrderID: base.OrderID, TriggerType: base.TriggerType, TriggerKey: "order_paid:event"},
+// results 收集两个竞争请求的执行结果。
+// run 是当前循环处理的竞争请求副本。
+// run 是当前协程独占的竞争请求副本。
 				{RuleID: base.RuleID, CookieID: base.CookieID, ItemID: base.ItemID, OrderID: base.OrderID, TriggerType: base.TriggerType, TriggerKey: "manual_delivery:cross-trigger-order"},
 			}
+// id、started、startErr 保存本次运行领取结果及错误。
 			start := make(chan struct{})
 			type result struct {
 				id      int64
 				started bool
+// first、second 保存两个竞争请求的返回结果。
 				err     error
 			}
 			results := make(chan result, len(runs))
+// startedCount 统计成功取得执行权的竞争请求数量。
+// got 是当前待检查的并发领取结果。
 			for _, run := range runs {
 				run := run
 				go func() {
@@ -258,6 +273,8 @@ func TestMultiDB_AutomationPaidRunCrossTriggerConcurrency(t *testing.T) {
 			first, second := <-results, <-results
 			if first.err != nil || second.err != nil {
 				t.Fatalf("并发领取返回错误: first=%+v second=%+v", first, second)
+// count 保存同一订单实际创建的运行记录数量。
+// err 保存查询同一订单运行记录数量的数据库错误。
 			}
 			startedCount := 0
 			for _, got := range []result{first, second} {
