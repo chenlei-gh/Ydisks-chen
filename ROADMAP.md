@@ -216,3 +216,13 @@
 - **批量 post_publish 复核**：`ItemBatchPublishPort.PublishRemoteRow` 在发现已有 ItemID 时直接复用检查点；`TestItemBatchPublishPortPersistsRemoteCheckpoint` 断言恢复不会再次调用平台（调用次数仍为 1）。现有防重实现已存在，不重复造轮子；待补 worker 层 post_publish 租约接管与最终收口的集成测试。
 - **图片资源边界**：主图/规格图先上传，再执行最终发布；上传成功不等于商品创建成功。发布前失败可能遗留孤立图片，当前未发现远端清理契约，后续按资源生命周期单独评估。
 - **验证状态**：本次为源码与既有测试源码审阅，没有运行新测试，也没有真实闲鱼操作。PR #2 的文档 CI 4/4 已通过，但不覆盖上述平台行为。
+
+
+### 2026-11-08 单商品发布持久化检查点实施前设计
+
+- 核实 `PublishItemRequest.BeforePublish` 已是最终商品创建请求发出前的 hook，且触发时图片上传和类目准备已完成；批量发布已使用，单商品尚未接入。
+- 设计原则：先持久化 `prepared`，hook 内再写 `started`，然后才发出最终创建请求；MTOP 返回 ItemID 后先写 `remote_confirmed`，再做 Cookie 写回和本地商品 Upsert，最后写 `local_confirmed`。
+- operation ID 必须由客户端在一次发布意图开始时生成并在未知结果重试时复用；同 ID 不同请求 fingerprint 冲突拒绝。图片不落库，但其摘要必须参与 fingerprint。
+- 远端请求已开始后遇到硬中断、网络未知、成功响应缺少 ItemID 或远端确认结果无法落库时，不得自动重发；同 ID 只能返回 `unknown/needs_review`。该 ID 不提供平台端 exactly-once 保证。
+- 实施范围应一次性包含 SQLite/MySQL/PostgreSQL migration、DB 原子状态转换、应用/适配器 hook、HTTP/OpenAPI、前端 ID 生命周期、重复请求/故障注入测试；不新增全局协调服务。
+- 本节为设计核查，不代表代码已实施或测试已运行。真实闲鱼平台测试仍暂停。
