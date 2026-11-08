@@ -183,7 +183,9 @@ file of form.images) {
 
 // getSinglePublishOperation 读取当前用户可见的单商品发布操作状态。
 export const getSinglePublishOperation = async (operationID: string): Promise<{
+    /** operation_id 是本次发布操作的稳定标识。 */
     operation_id: string;
+    /** state 是服务端持久化的发布阶段。 */
     state: 'prepared' | 'started' | 'remote_confirmed' | 'local_confirmed' | 'unknown';
     item_id: string;
     item_url: string;
