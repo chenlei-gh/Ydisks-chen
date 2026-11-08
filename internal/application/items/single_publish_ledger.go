@@ -10,15 +10,15 @@ import (
 
 // PublishOperation 是应用层可见的单商品发布检查点，不暴露数据库模型。
 type PublishOperation struct {
-	OperationID string
-	UserID int64
-	CookieID string
+	OperationID        string
+	UserID             int64
+	CookieID           string
 	RequestFingerprint string
-	State string
-	ItemID string
-	ItemURL string
-	RawJSON string
-	ErrorMessage string
+	State              string
+	ItemID             string
+	ItemURL            string
+	RawJSON            string
+	ErrorMessage       string
 }
 
 // PublishOperationLedger 是单商品发布所需的最小持久化端口。
