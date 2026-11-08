@@ -57,19 +57,19 @@ func (r *SinglePublishOperationRepository) MarkStarted(ctx context.Context, user
 }
 
 // MarkRemoteConfirmed 保存平台确认的商品结果。
-func (r *SinglePublishOperationRepository) MarkRemoteConfirmed(ctx context.Context, userID int64, operationID, itemID, itemURL, rawJSON string) error {
+func (r *SinglePublishOperationRepository) MarkRemoteConfirmed(ctx context.Context, userID int64, operationID, itemID, itemURL, rawJSON string, message ...string) error {
 	if r == nil || r.store == nil || r.store.SinglePublishOperations == nil {
 		return errors.New("单商品发布操作存储未初始化")
 	}
-	return r.store.SinglePublishOperations.MarkRemoteConfirmed(ctx, userID, operationID, itemID, itemURL, rawJSON)
+	return r.store.SinglePublishOperations.MarkRemoteConfirmed(ctx, userID, operationID, itemID, itemURL, rawJSON, message...)
 }
 
 // MarkLocalConfirmed 标记本地商品记录收口完成。
-func (r *SinglePublishOperationRepository) MarkLocalConfirmed(ctx context.Context, userID int64, operationID string) error {
+func (r *SinglePublishOperationRepository) MarkLocalConfirmed(ctx context.Context, userID int64, operationID string, message ...string) error {
 	if r == nil || r.store == nil || r.store.SinglePublishOperations == nil {
 		return errors.New("单商品发布操作存储未初始化")
 	}
-	return r.store.SinglePublishOperations.MarkLocalConfirmed(ctx, userID, operationID)
+	return r.store.SinglePublishOperations.MarkLocalConfirmed(ctx, userID, operationID, message...)
 }
 
 // MarkUnknown 隔离平台结果未知的操作。
