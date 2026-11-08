@@ -19,6 +19,23 @@
 | 风险边界 | 人工补发每次从快照第一条消息重新发送，没有逐消息补发游标 | 若一次补发中前几条已成功、后续失败，下一次用户再次发起补发会从头发送快照；可能重复发送前面成功的内容。当前属于用户主动完整补发语义，是否接受需产品层明确，不能描述成无重复恢复。 |
 | 相邻范围 | `status_only` 手动确认发货路径不走完整发货运行锁 | 该路径不消耗卡密，但可以与自动发货运行并行；是否必须阻止其在自动发货进行中确认订单，需要单独确认业务语义。此项不擅自扩入本轮 P0 修复。 |
 
+## 1.1 审计后修复进度（2026-11-08）
+
+以下是审计后在本分支已提交的最小修复；它们尚未经过本地或 CI 测试运行，不应标记为已验证通过。
+
+| 原审计项 | 分支修复 | 回归测试 | 状态 |
+|---|---|---|---|
+| P0 `ReleaseBatchData` 重复释放 | `internal/db/card_sale_records.go`：先在同一事务中条件删除对应卡组的 reserved 台账；已不存在则 no-op；状态/卡组不匹配则报错；库存 CAS 冲突时事务回滚，删除与库存恢复一起重试。 | `TestCards_ReleaseBatchDataIsIdempotent`、`TestMultiDB_CardSaleReleaseIsIdempotent` | 已提交，待执行 |
+| P1 人工补发成功收口未结算台账 | `CompleteDeliveryReplay` 改为事务收口，并复用 `finishRunTail`，成功状态与 reserved → sold 结算原子提交。 | `TestMultiDB_CardSaleReplayCompletionSettlesReserved` | 已提交，待执行 |
+
+相关提交：
+- `b4c93a70e1dd1995470a207526278037c19cd5d5`：库存释放幂等修复。
+- `b31888978f64784661d6883314490c29ebf84a9a`：人工补发收口结算修复。
+- `63e69f30ecdd6bc939ae06a72267aaca3f796888`：库存重复/并发释放与补发台账结算回归测试。
+- 当前 PR：[#1](https://github.com/chenlei-gh/Ydisks-chen/pull/1)，draft，未合并。
+
+**验证状态**：尝试在本地克隆仓库时，运行环境无法解析 `github.com`，因此没有本地测试结果。PR 创建后暂未观察到 GitHub Actions workflow run 或 commit status；不能声称 CI 已启动或通过。后续以 PR 实际检查结果为准。
+
 ## 2. 自动发货调用链（1.1）
 
 1. 自动事件进入自动化中心，按规则匹配后调用 `automationRunCoordinator.executeRule`。
