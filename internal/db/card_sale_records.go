@@ -228,6 +228,7 @@ func (c *Cards) tryReleaseBatchData(ctx context.Context, cardID, recordID int64,
 			// 不存在表示之前已成功释放；仍存在则说明状态或卡组不匹配，不能静默恢复。
 // readErr 保存读取现有售出台账状态时发生的数据库错误。
 			var exists int
+// readErr 保存读取现有售出台账状态时发生的数据库错误。
 			readErr := tx.QueryRowContext(ctx, `SELECT 1 FROM card_sale_records WHERE id=?`, recordID).Scan(&exists)
 			if errors.Is(readErr, sql.ErrNoRows) {
 				return false, nil
