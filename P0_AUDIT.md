@@ -85,7 +85,7 @@
 - 人工快照补发不创建第二条发货运行，而是通过同一运行记录的 `ClaimDeliveryReplay` CAS 领取新 attempt。
 - `TestManualDeliveryCannotRaceWithAutomaticDelivery` 覆盖了“人工预检查后自动先完成，人工随后执行”的交错场景，断言不会第二次发送。
 
-**测试证据限制**：上述自动/人工交错测试是 SQLite 确定性顺序交错，不是 MySQL/PostgreSQL 上两个并发请求同时竞争的端到端测试。底层归属锁有多方言测试，但尚未看到专门对自动/人工不同 trigger key 同时并发调用 `TryStartRun` 的三方言竞争测试。
+**测试证据限制**：原有 `TestManualDeliveryCannotRaceWithAutomaticDelivery` 是 SQLite 确定性顺序交错。审计后新增 `TestMultiDB_AutomationPaidRunCrossTriggerConcurrency`，通过两个 goroutine 同时以不同 trigger key 竞争同一账号/订单，并使用 `allTestTargets` 覆盖 SQLite 与配置的 MySQL/PostgreSQL；该测试尚未运行，不能当作已验证结果。
 
 `status_only` 手动确认发货不经过上述完整发货运行链路；本报告只将其记录为相邻范围风险，不混同于人工完整补发。
 
@@ -169,6 +169,7 @@
 | `TestAutomationRunAttemptFencesStaleWorker` | 旧 attempt 不能领取动作、收口或隔离新代次 | SQLite 仓储集成 |
 | `TestMultiDB_AutomationExecutionLease` | 续租、过期拒绝、陈旧扫描与有效隔离 | SQLite + 配置时真实 MySQL/PostgreSQL |
 | `TestMultiDB_AutomationOwnershipFence` | 运行/延期痕迹与订单归属修复的提交顺序互斥 | SQLite + 配置时真实 MySQL/PostgreSQL |
+| `TestMultiDB_AutomationPaidRunCrossTriggerConcurrency` | 自动事件与人工完整发货不同 trigger key 同时竞争同一订单，只允许一个取得运行权 | 新增；SQLite + 配置时真实 MySQL/PostgreSQL，待执行 |
 | `TestDeliveryReplayExpiredOwnerCannotSend` | 旧补发代次失权后不能继续发送或覆盖新代次 | SQLite + 消息/平台替身 |
 | `TestManualDeliveryCannotRaceWithAutomaticDelivery` | 人工预检查与自动先执行的交错不重复发送 | SQLite + 消息/平台替身；不是并发多方言测试 |
 | `TestDeliveryReplayProofFailureBlocksFurtherConsumption` | 补发结果快照保存失败后持久化占用，禁止再次取卡 | SQLite 故障注入 |
@@ -184,7 +185,7 @@
 **覆盖缺口**：
 - 没有重复/并发调用 `ReleaseBatchData` 的测试。
 - 没有人工补发路径中 `MarkSaleRecordsSold` 失败后由 `CompleteDeliveryReplay` 兜底结算的测试。
-- 自动/人工不同 trigger key 的真正同时竞争缺少专门的三方言并发测试。
+- 自动/人工不同 trigger key 的真正同时竞争测试已新增，但尚无执行结果；需等待 CI 运行确认。
 - 本次未运行 Go 测试，也没有本开发分支的 CI 结果；测试文件存在不代表通过。
 - 没有闲鱼真实账号/订单的平台 E2E 证据。
 
@@ -192,7 +193,7 @@
 
 1. **先修复 `ReleaseBatchData` 的单记录单次释放约束**，添加重复调用与并发竞争回归测试，覆盖 SQLite、MySQL、PostgreSQL。
 2. 修复 `CompleteDeliveryReplay` 成功收口时 reserved 台账结算，补充故障注入测试。
-3. 添加自动发货与人工完整发货不同 trigger key 的真实并发领取测试（至少覆盖所有 CI 方言）。
+3. 已添加自动发货与人工完整发货不同 trigger key 的真实并发领取测试（至少覆盖所有 CI 方言）；待 CI 执行确认。
 4. 对人工补发逐消息重复发送行为明确产品语义；若要求失败后不重发已确认成功的消息，再设计逐消息持久化进度，不要只加内存游标。
 5. 保留“远端未知结果必须人工核对”的现有安全边界；未证明平台幂等能力前不引入自动盲重试。
 
