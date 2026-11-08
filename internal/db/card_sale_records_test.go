@@ -472,3 +472,72 @@ func TestMultiDB_CardSaleReplayCompletionSettlesReserved(t *testing.T) {
 		})
 	}
 }
+
+
+// TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold 验证旁路 MarkSaleRecordsSold 失败后，成功收口仍能在事务内兜底结算。
+func TestAutomationCompleteDeliveryReplayRecoversFailedMarkSold(t *testing.T) {
+	store, cleanup := newTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	userID, cookieID, cardID := seedSaleCard(t, store)
+	ruleID, err := store.Automation.Create(ctx, AutomationRuleInput{
+		UserID: userID, CookieID: cookieID, ItemID: "i1", Name: "replay-ledger-failure",
+		TriggerType: "order_paid", Enabled: true,
+		Actions: []AutomationActionInput{{ActionType: "send_card", Enabled: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID, started, err := store.Automation.TryStartRun(ctx, AutomationRun{
+		RuleID: ruleID, CookieID: cookieID, ItemID: "i1", OrderID: "replay-ledger-failure-order",
+		TriggerType: "order_paid", TriggerKey: "order_paid:replay-ledger-failure-order",
+	})
+	if err != nil || !started {
+		t.Fatalf("启动运行失败: started=%v err=%v", started, err)
+	}
+	if claimed, claimErr := store.Automation.StartRunAction(ctx, runID, 1, 0, time.Now().UTC().Add(time.Minute).Unix()); claimErr != nil || !claimed {
+		t.Fatalf("领取动作失败: claimed=%v err=%v", claimed, claimErr)
+	}
+	proof := AutomationDeliveryProof{
+		TradeText: "previously delivered", ExpectedUnits: 1, PreparedUnits: 1,
+		Messages: []AutomationDeliveryMessage{{Kind: "text", Content: "previously delivered"}},
+	}
+	if err := store.Automation.QuarantineRunResultWithProof(ctx, runID, 1, 1, "manual replay fixture", &proof); err != nil {
+		t.Fatal(err)
+	}
+	attempt, claimed, err := store.Automation.ClaimDeliveryReplay(ctx, runID, 1, time.Now().UTC().Add(time.Minute).Unix())
+	if err != nil || !claimed || attempt != 2 {
+		t.Fatalf("领取人工补发失败: attempt=%d claimed=%v err=%v", attempt, claimed, err)
+	}
+	_, recordID, err := store.Cards.ReserveBatchData(ctx, cardID, CardSaleMeta{
+		RunID: runID, CookieID: cookieID, OrderID: "replay-ledger-failure-order", ItemID: "i1",
+	})
+	if err != nil || recordID == 0 {
+		t.Fatalf("预占补发库存失败: record=%d err=%v", recordID, err)
+	}
+	// SQLite trigger 注入旁路台账确认失败，模拟 MarkSaleRecordsSold 的数据库写入错误。
+	if _, err := store.DB.ExecContext(ctx, `CREATE TRIGGER fail_mark_sold BEFORE UPDATE OF status ON card_sale_records
+		WHEN NEW.status='sold' BEGIN SELECT RAISE(ABORT, 'injected MarkSaleRecordsSold failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Cards.MarkSaleRecordsSold(ctx, recordID); err == nil {
+		t.Fatal("故障注入应使 MarkSaleRecordsSold 失败")
+	}
+	var status string
+	if err := store.DB.QueryRowContext(ctx, `SELECT status FROM card_sale_records WHERE id=?`, recordID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != SaleStatusReserved {
+		t.Fatalf("旁路确认失败后台账应仍为 reserved，got %q", status)
+	}
+	if _, err := store.DB.ExecContext(ctx, `DROP TRIGGER fail_mark_sold`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Automation.CompleteDeliveryReplay(ctx, runID, attempt); err != nil {
+		t.Fatalf("成功收口应兜底结算 reserved 台账: %v", err)
+	}
+	records, err := store.Cards.ListSaleRecordsByOrder(ctx, userID, cookieID, "replay-ledger-failure-order")
+	if err != nil || len(records) != 1 || records[0].Status != SaleStatusSold {
+		t.Fatalf("补发成功收口后台账应为 sold: records=%+v err=%v", records, err)
+	}
+}
