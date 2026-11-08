@@ -72,6 +72,7 @@ jobs:
         run: test "${{ steps.architecture.outcome }}" = "success"
 
       - name: Commit formatted files and remove temporary workflow
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
