@@ -89,6 +89,8 @@ type ledgerPublisherFake struct {
 	result     *PublishResult
 	// publishErr 是模拟的平台调用错误。
 	publishErr error
+	// responseCookieErr 是平台成功后本地 Cookie 更新失败的模拟错误。
+	responseCookieErr error
 	// skipGate 表示模拟图片准备阶段失败，尚未通过最终创建请求闸门。
 	skipGate   bool
 }
@@ -103,7 +105,7 @@ func (p *ledgerPublisherFake) Publish(ctx context.Context, input PublishInput) (
 	if p.publishErr != nil {
 		return PublishOutcome{}, p.publishErr
 	}
-	return PublishOutcome{Result: p.result}, nil
+	return PublishOutcome{Result: p.result, ResponseCookieErr: p.responseCookieErr}, nil
 }
 
 // ledgerRepositoryFake 模拟本地商品 Upsert，并允许指定次数失败。
@@ -218,6 +220,41 @@ func TestSinglePublishLedgerRejectsFingerprintReuse(t *testing.T) {
 	_, err = service.PublishSingle(context.Background(), changedInput)
 	if !errors.Is(err, ErrPublishOperationFingerprintMismatch) {
 		t.Fatalf("error=%v want ErrPublishOperationFingerprintMismatch", err)
+	}
+	if publisher.calls != 1 {
+		t.Fatalf("publisher calls=%d want 1", publisher.calls)
+	}
+}
+
+
+// TestSinglePublishLedgerPreservesCookieWarning 验证发布成功后的 Cookie 写回问题在操作恢复后仍会提示。
+func TestSinglePublishLedgerPreservesCookieWarning(t *testing.T) {
+	// ledger 保存持久化操作测试替身。
+	ledger := newLedgerTestFake()
+	// cookieWarning 保存模拟的本地 Cookie 更新失败。
+	cookieWarning := errors.New("cookie persistence failed")
+	// publisher 保存返回商品成功但 Cookie 写回失败的平台替身。
+	publisher := &ledgerPublisherFake{
+		result: &PublishResult{ItemID: "item-cookie-warning"},
+		responseCookieErr: cookieWarning,
+	}
+	// repository 保存本地商品仓储替身。
+	repository := &ledgerRepositoryFake{}
+	// service 保存启用持久化操作账本的应用服务。
+	service, err := NewServiceWithOperationLedger(publisher, repository, ledger)
+	if err != nil {
+		t.Fatalf("NewServiceWithOperationLedger error: %v", err)
+	}
+	// input 保存本次测试使用的稳定操作标识和指纹。
+	input := PublishInput{UserID: 7, CookieID: "account-7", OperationID: "op-cookie-warning", RequestFingerprint: "fp-warning"}
+	first, err := service.PublishSingle(context.Background(), input)
+	if err != nil || !errors.Is(first.ResponseCookieErr, cookieWarning) {
+		t.Fatalf("first outcome=%+v err=%v", first, err)
+	}
+	// second 保存重复请求读取的持久化结果。
+	second, err := service.PublishSingle(context.Background(), input)
+	if err != nil || second.Result == nil || !errors.Is(second.ResponseCookieErr, cookieWarning) {
+		t.Fatalf("second outcome=%+v err=%v", second, err)
 	}
 	if publisher.calls != 1 {
 		t.Fatalf("publisher calls=%d want 1", publisher.calls)
