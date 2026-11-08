@@ -181,6 +181,17 @@ file of form.images) {
     return runContractRequest(/* signal 控制商品发布上传请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/publish', { body: contractMultipartBody(body), signal })) as unknown as Promise<ItemPublishResponse>;
 }
 
+// getSinglePublishOperation 读取当前用户可见的单商品发布操作状态。
+export const getSinglePublishOperation = async (operationID: string): Promise<{
+    operation_id: string;
+    state: 'prepared' | 'started' | 'remote_confirmed' | 'local_confirmed' | 'unknown';
+    item_id: string;
+    item_url: string;
+}> => runContractRequest(/* signal 控制发布操作状态查询请求的取消和超时。 */ signal => contractClient.GET('/api/v1/items/publish-operations/{operation_id}', {
+    params: { path: { operation_id: operationID } },
+    signal,
+}));
+
 // recommendPublishCategory 推荐商品发布分类。
 export const recommendPublishCategory = async (cookieId: string, keyword: string, options?: RequestControlOptions): Promise<CategoryRecommendationResponse> => {
     // 类目推荐成功响应使用共享 CategoryRecommendationResponse。
