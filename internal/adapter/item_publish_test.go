@@ -192,6 +192,7 @@ func TestItemPublishPortRetriesAfterSessionRecovery(t *testing.T) {
 	recovery := func(ctx context.Context, cookieID string, recoveryErr error) bool {
 		recovered = recoveryErr != nil
 		// updateErr 保存模拟续期凭证写入的持久化错误。
+		// updateErr 保存模拟恢复凭证的数据库写入错误。
 		if updateErr := store.Cookies.UpdateValueExisting(ctx, cookieID, "unb=1; fresh=1"); updateErr != nil {
 			t.Fatalf("写入续期凭证失败: %v", updateErr)
 		}
@@ -281,6 +282,7 @@ func TestItemPublishPortDoesNotReplayAfterFinalPublishGate(t *testing.T) {
 		if request.BeforePublish == nil {
 			t.Fatal("最终发布前闸门未传递给 MTOP 客户端")
 		}
+		// gateErr 保存模拟最终请求闸门的执行错误。
 		if gateErr := request.BeforePublish(ctx); gateErr != nil {
 			t.Fatalf("最终发布前闸门执行失败: %v", gateErr)
 		}
