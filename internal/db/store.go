@@ -109,6 +109,7 @@ func NewStore(db *sql.DB, dialect Dialect) *Store {
 		UserSettings:      &UserSettings{DB: db, Dialect: dialect},
 		WSMessages:        &WSMessageStore{DB: db},
 		PublishBatches:    &ItemPublishBatches{DB: db},
+		SinglePublishOperations: &SinglePublishOperations{DB: db},
 		Tokens:            &AccountTokens{DB: db, Dialect: dialect, codec: codec},
 		Renewal:           &RenewalStore{DB: db, Dialect: dialect},
 		LoginLogs:         &AccountLoginLogs{DB: db},
