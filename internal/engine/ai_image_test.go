@@ -8,10 +8,10 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
-
-	"xianyu-go/internal/netguard"
 	"strings"
 	"testing"
+
+	"xianyu-go/internal/netguard"
 )
 
 // buyerPNGForTest 构造指定尺寸的 PNG 图片，供下载和像素上限测试复用。
@@ -106,7 +106,7 @@ func TestDownloadBuyerImageDataURLRejectsInvalidAndOversizedImages(t *testing.T)
 // TestDownloadBuyerImageDataURLRejectsLoopback 验证买家图片下载始终使用公网访问策略。
 func TestDownloadBuyerImageDataURLRejectsLoopback(t *testing.T) {
 	// newBuyerImageHTTPClient 恢复生产默认值，确保测试实际验证 PublicHTTPClient。
-	newBuyerImageHTTPClient = func() *http.Client { return netguard.PublicHTTPClient(buyerImageTimeout) }
+	withBuyerImageHTTPClient(t, netguard.PublicHTTPClient(buyerImageTimeout))
 	if _, err := downloadBuyerImageDataURL(context.Background(), "http://127.0.0.1:12345/image.png"); err == nil {
 		t.Fatal("回环地址必须被公网策略拒绝")
 	}
