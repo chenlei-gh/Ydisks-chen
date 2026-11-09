@@ -283,7 +283,7 @@ func TestMultiDBKeywordExpressionsMigration(t *testing.T) {
 				t.Fatal("keyword expression columns should be absent after down to 00053")
 			}
 			// upErr 保存重新应用关键词表达式迁移的错误。
-			if upErr := goose.UpTo(target.store.DB, "migrations/"+subdir, 60; upErr != nil {
+			if upErr := goose.UpTo(target.store.DB, "migrations/"+subdir, 60); upErr != nil {
 				t.Fatalf("up keyword expression migration: %v", upErr)
 			}
 			if !columnExistsForDialect(t, target.store.DB, target.dialect, "keywords", "keyword_expressions") || !columnExistsForDialect(t, target.store.DB, target.dialect, "keywords", "match_type") {
