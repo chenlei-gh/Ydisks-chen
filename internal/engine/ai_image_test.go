@@ -160,7 +160,6 @@ func TestBuyerImageFallbackTextPreventsGuessing(t *testing.T) {
 	}
 }
 
-
 // TestDownloadBuyerImageDataURLRejectsCrossHostRedirect 验证买家图片入口拒绝跳转到另一主机。
 func TestDownloadBuyerImageDataURLRejectsCrossHostRedirect(t *testing.T) {
 	// data 是有效图片字节；若重定向策略失效，目标服务器会成功接收请求。
