@@ -42,6 +42,7 @@ jobs:
               - '**/testdata/**'
               - 'go.mod'
               - 'go.sum'
+              - '.env.example'
               - '.golangci.yml'
               - 'tools/**'
               - 'api/**'
@@ -57,6 +58,7 @@ jobs:
               - '.dockerignore'
               - 'compose*.yml'
               - 'docker-compose*.yml'
+              - 'scripts/**'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
@@ -67,6 +69,7 @@ jobs:
               - '.dockerignore'
               - 'compose*.yml'
               - 'docker-compose*.yml'
+              - 'scripts/**'
               - '.github/workflows/**'
             smoke:
               - 'cmd/server/**'
@@ -84,6 +87,7 @@ jobs:
               - '.dockerignore'
               - 'compose*.yml'
               - 'docker-compose*.yml'
+              - 'scripts/**'
               - '.github/workflows/**'
             multidb:
               - 'internal/db/**'
@@ -95,6 +99,7 @@ jobs:
               - '.dockerignore'
               - 'compose*.yml'
               - 'docker-compose*.yml'
+              - 'scripts/**'
               - '.github/workflows/**'
 
   go:
