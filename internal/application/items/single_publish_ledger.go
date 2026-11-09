@@ -37,6 +37,9 @@ var ErrPublishOperationUncertain = errors.New("商品发布结果尚未确认，
 // ErrPublishOperationFingerprintMismatch 表示同一操作 ID 被不同发布内容复用。
 var ErrPublishOperationFingerprintMismatch = errors.New("发布操作 ID 已绑定其他商品内容")
 
+// ErrPublishResultMissingItemID 表示最终创建请求已发出，但平台成功响应缺少商品 ID。
+var ErrPublishResultMissingItemID = errors.New("平台发布响应缺少商品 ID，结果已隔离，禁止自动重发")
+
 // publishSingleWithLedger 按持久化状态决定执行远端发布、恢复本地收尾或返回已确认结果。
 func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishInput) (PublishOutcome, error) {
 	input.OperationID = strings.TrimSpace(input.OperationID)
@@ -149,6 +152,7 @@ func (svc *Service) publishSingleWithLedger(ctx context.Context, input PublishIn
 			if unknownErr != nil {
 				return outcome, fmt.Errorf("平台结果缺少商品 ID，且隔离操作失败: %w", unknownErr)
 			}
+			return outcome, ErrPublishResultMissingItemID
 		}
 		return outcome, ErrPublishOperationUncertain
 	}
