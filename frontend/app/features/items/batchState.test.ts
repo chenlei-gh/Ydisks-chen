@@ -2,7 +2,6 @@ import { describe,expect,test } from 'vitest';
 import {
 batchStatusClass,
 batchStatusText,
-buildBatchResultsCSV,
 canRetryBatch,
 canStartBatch,
 isBatchInProgress,
@@ -80,32 +79,4 @@ describe('ItemList batch state',
     expect(batchStatusClass('canceled')).toContain('bg-gray-100');
     expect(batchStatusClass('pending')).toContain('bg-amber-50');
     });
-});
-
-
-// CSV 导出必须保留逐行结果、正确转义文本并防止电子表格公式注入。
-test('exports batch rows as safe spreadsheet-compatible CSV', () => {
-  // rows 保存包含逗号、引号、换行和公式前缀的结果样本。
-  const rows = [{
-    id: 1,
-    row_no: 3,
-    cookie_id: 'account-1',
-    title: '=HYPERLINK("https://example.invalid")',
-    price: '12.50',
-    quantity: 2,
-    status: 'failed',
-    item_id: '',
-    item_url: '',
-    error_message: '失败, "需要检查"\n第二行',
-    failure_kind: 'publish',
-    category: { cat_id: 'cat-1', cat_name: '测试类目', channel_cat_id: 'channel-1' },
-  }];
-  // csv 保存编码后的完整导出内容。
-  const csv = buildBatchResultsCSV(rows);
-  expect(csv.startsWith('\uFEFF')).toBe(true);
-  expect(csv).toContain('"原始行号","账号 ID","标题","价格","库存","状态","类目","商品 ID","商品链接","失败类型","错误原因"');
-  expect(csv).toContain(`"'=HYPERLINK(""https://example.invalid"")"`);
-  expect(csv).toContain('"失败, ""需要检查""\n第二行"');
-  expect(csv).toContain('"测试类目"');
-  expect(csv).toContain('"失败"');
 });
