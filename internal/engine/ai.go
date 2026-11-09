@@ -262,9 +262,9 @@ func (a *AIReplierImpl) conversationContext(ctx context.Context, m ChatMessage) 
 
 // globalAIConfig 用于本次流程后续判断的globalAI配置
 type globalAIConfig struct {
-	APIKey     string
-	BaseURL    string
-	Model      string
+	APIKey      string
+	BaseURL     string
+	Model       string
 	VisionModel string
 }
 
@@ -306,8 +306,8 @@ func (a *AIReplierImpl) globalAIConfig(ctx context.Context) (*globalAIConfig, er
 		model = defaultAIModel
 	}
 	return &globalAIConfig{
-		APIKey:  strings.TrimSpace(apiKey),
-		BaseURL: baseURL,
+		APIKey:      strings.TrimSpace(apiKey),
+		BaseURL:     baseURL,
 		Model:       model,
 		VisionModel: strings.TrimSpace(visionModel),
 	}, nil
