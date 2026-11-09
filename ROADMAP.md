@@ -115,7 +115,7 @@
 
 - [x] 4.1 审计单商品发布、批量任务、逐行结果、图片上传、规格发布和任务恢复的调用链（静态调用链复核完成；单商品账本已合并，批量行检查点/接管路径已审阅）。
 - [x] 4.2 核对远端创建成功但本地响应/提交失败时，是否能识别未知结果并防止重复创建（PR #7/#9：持久化操作账本、unknown 隔离、远端确认后本地恢复；CI 通过；平台端 exactly-once 仍不作保证）。
-- [ ] 4.3 核对批量任务每一行的独立状态、重试边界、失败隔离、断点续跑和结果导出。
+- [x] 4.3 核对批量任务每一行的独立状态、重试边界、失败隔离、断点续跑和结果导出（PR #16 补齐 worker 层 `post_publish` 租约接管到最终收口的集成回归；CI 通过，见下方记录）。
 - [x] 4.4 核对图片/附件临时文件的生命周期、大小限制、失败清理和重复上传风险；已修复本地批次目录删除失败时数据库路径丢失的问题（PR #8，最新 head CI 4/4 通过）。远端闲鱼图片回收 API 未证实，仍不做猜测性清理。
 - [ ] 4.5 在现有机制不足时，补充远端操作状态、逐项恢复和并发目标锁。
 - [x] 4.6 增加批量部分成功、重复提交、超时、worker 中断、数据库提交失败等测试（现有 DB/adapter 回归测试覆盖；PR #8 全量 Go CI、PR #13 定向 Go CI 通过；真实平台 E2E 不在此结论内）。
@@ -296,6 +296,7 @@
 
 - **4.2 完成（本地代码与数据库证据）**：PR #7/#9 已合并。单商品发布使用稳定 operation ID 和请求指纹；`prepared -> started -> remote_confirmed -> local_confirmed` 持久化迁移可在 SQLite/MySQL/PostgreSQL 验证；`started -> unknown` 会阻止同一操作自动重发。CI：PR #7 run [42542832914](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42542832914)，PR #9 run [42620227063](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42620227063)。远端 exactly-once 未获平台契约支持，硬中断停留 `started` 时仍需人工核对。
 - **4.3 部分完成**：批量明细已有独立状态、worker token、租约、`remote_started`、ItemID/URL/raw JSON 检查点、失败行筛选与结果 CSV 导出；已有 DB 测试验证 lease takeover 时未知远端结果隔离、已保存 ItemID 的行恢复。尚缺 worker 层 `post_publish` 租约接管到最终收口的集成回归证据，暂不勾选完成。
+- **4.3 完成（本地自动化测试范围）**：PR [#16](https://github.com/chenlei-gh/Ydisks-chen/pull/16) 已合并，合并提交 `d1f38e65975f60eb8a04f38d9a26d45fa6414947`。新增 `internal/adapter/item_batch_post_publish_recovery_integration_test.go`，使用真实 `BatchRunner`、`ItemBatchRepository`、`ItemBatchPublishPort` 与 SQLite 数据库，验证旧 worker 在远端成功且 ItemID 检查点已保存后失租，新 worker 接管并完成本地收口，且不会再次调用平台发布接口。CI run [42650479370](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42650479370) 的 Go 检查、按影响范围选择的 Go 测试、server 并发 smoke race、真实二进制 + 临时 SQLite 冒烟均通过；MySQL/PostgreSQL 与 React 按改动范围跳过。**边界**：本地 completion service 使用测试替身，替身写入真实 DB；因此这是 worker/adapter/repository 层集成回归，不是完整生产 service 或闲鱼平台 E2E。
 - **4.5 部分完成/待决策**：单商品账本以唯一 operation ID 和条件状态迁移实现同一发布意图的并发闸门；批量发布以批次 lease + row claim/token 实现逐行并发隔离。复核 `frontend/app/features/items/singlePublishOperation.ts` 发现活动 operation ID 存在 `sessionStorage`，作用域是浏览器标签页；服务端唯一约束是 operation ID，而不是请求指纹，因此不同标签页/设备可为相同内容生成不同 ID。是否增加短期同指纹互斥需要产品语义决策：相同内容也可能是用户有意发布的第二条商品，不能直接把内容指纹当永久唯一商品身份。当前不新增全局锁或协调服务。
 - **4.6 完成（自动化测试范围）**：批量部分成功/计数与失败行重置、worker claim 互斥和租约接管、未知远端结果隔离、超时及远端成功后 checkpoint 写入失败均有回归测试。PR #8 run [42546788164](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42546788164) 的 Go/React/多数据库/冒烟 4/4 通过；PR #13 run [42624548385](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42624548385) 通过。故障注入主要基于 SQLite；PR #7/#9 的多数据库结果另行记录，不将其扩大解释为批量全路径三方言验证。
 - **边界**：上述结论只覆盖本地自动化测试与 CI，不代表真实闲鱼商品发布、图片上传或远端幂等行为已验证；真实账号/订单 E2E 继续暂停。
