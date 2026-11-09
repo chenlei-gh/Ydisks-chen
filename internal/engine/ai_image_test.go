@@ -53,6 +53,30 @@ func TestExtractBuyerImageURLOnlyAcceptsImageMessages(t *testing.T) {
 	}
 }
 
+// TestExtractChatMessageRetainsImageOnlyBuyerMessage 验证无提醒文本的买家图片仍进入消息分发模型。
+func TestExtractChatMessageRetainsImageOnlyBuyerMessage(t *testing.T) {
+	// raw 是仅包含图片正文、没有 reminderContent 的平台入站帧。
+	raw := map[string]any{
+		"1": map[string]any{
+			"2": "chat-image-only@goofish",
+			"10": map[string]any{
+				"extJson": `{"contentType":"2"}`,
+				"senderUserId": "buyer-1",
+				"reminderUrl": "https://www.goofish.com/item?id=item-1",
+			},
+		},
+		"image": map[string]any{"pics": []any{map[string]any{"url": "https://images.example/buyer.png"}}},
+	}
+	// message 是平台帧归一后的买家消息。
+	message := extractChatMessage(raw, "account-1", "unb=seller-1;")
+	if message == nil || message.Text != "" || message.ChatID != "chat-image-only" {
+		t.Fatalf("图片消息未保留或字段错误: %+v", message)
+	}
+	if !isBuyerImageMessage(*message) || extractBuyerImageURL(*message) != "https://images.example/buyer.png" {
+		t.Fatalf("图片消息类型或 URL 提取错误: %+v", message)
+	}
+}
+
 // TestDownloadBuyerImageDataURLValidatesPNG 验证 PNG 按真实字节识别并转换为 data URL。
 func TestDownloadBuyerImageDataURLValidatesPNG(t *testing.T) {
 	// data 是小尺寸合法 PNG 的编码字节。
