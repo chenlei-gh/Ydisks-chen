@@ -28,15 +28,20 @@ var newBuyerImageHTTPClient = func() *http.Client {
 	return netguard.PublicHTTPClient(buyerImageTimeout)
 }
 
-// extractBuyerImageURL 仅从 contentType=2 的买家入站消息中提取第一张图片地址。
-func extractBuyerImageURL(message ChatMessage) string {
+// isBuyerImageMessage 判断当前入站消息是否为平台标记的图片消息。
+func isBuyerImageMessage(message ChatMessage) bool {
 	if message.Raw == nil {
-		return ""
+		return false
 	}
 	// messageBody 和 messageExtra 保存平台消息主体与扩展字段。
 	messageBody, _ := message.Raw["1"].(map[string]any)
 	messageExtra, _ := messageBody["10"].(map[string]any)
-	if messageContentType(messageBody, messageExtra) != "2" {
+	return messageContentType(messageBody, messageExtra) == "2"
+}
+
+// extractBuyerImageURL 仅从 contentType=2 的买家入站消息中提取第一张图片地址。
+func extractBuyerImageURL(message ChatMessage) string {
+	if !isBuyerImageMessage(message) {
 		return ""
 	}
 	return extractImageObservationContent(message.Raw)
