@@ -257,28 +257,41 @@ func DialPublicContext(ctx context.Context, network, address string, timeout tim
 func dialContextWithPolicy(ctx context.Context, network, address string, timeout time.Duration,
 	allow func(net.IP) bool, deniedMessage, connectErrorMessage string,
 ) (net.Conn, error) {
-	// host、port、err 用于本次流程后续判断的host、port、err
+	// dialer 只负责连接已完成策略校验的 IP，不再接收原始主机名。
+	dialer := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
+	return dialContextWithResolver(ctx, network, address, net.DefaultResolver.LookupIPAddr, dialer.DialContext,
+		allow, deniedMessage, connectErrorMessage)
+}
+
+// dialContextWithResolver 将 DNS 解析与拨号端口显式分离，确保连接目标只能来自本次已校验的解析结果。
+// lookup 和 dial 允许测试确定性模拟 DNS 结果及连接目标；生产调用仍使用系统解析器和标准 TCP 拨号器。
+func dialContextWithResolver(ctx context.Context, network, address string,
+	lookup func(context.Context, string) ([]net.IPAddr, error),
+	dial func(context.Context, string, string) (net.Conn, error),
+	allow func(net.IP) bool, deniedMessage, connectErrorMessage string,
+) (net.Conn, error) {
+	// host、port、err 用于本次流程后续判断的host、port、err。
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
-	// ips、err 用于本次流程后续判断的ips、err
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	// ips、err 保存一次 DNS 查询得到的候选地址；后续拨号不得再次使用主机名解析。
+	ips, err := lookup(ctx, host)
 	if err != nil {
 		return nil, err
 	}
-	// dialer 用于本次流程后续判断的dialer
-	dialer := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
-	// lastErr 用于本次流程后续判断的lastErr
+	// lastErr 保存允许地址的最后一次连接错误。
 	var lastErr error
-	// foundAllowed 用于本次流程后续判断的foundAllowed
+	// foundAllowed 标记本次 DNS 结果中是否至少包含一个策略允许的地址。
 	foundAllowed := false
-	// resolved 表示当前遍历过程中的resolved
+	// resolved 表示当前遍历过程中的 DNS 解析结果。
 	for _, resolved := range ips {
 		if allow(resolved.IP) {
 			foundAllowed = true
-			// conn、dialErr 用于本次流程后续判断的conn、dialErr
-			conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(resolved.IP.String(), port))
+			// target 是已通过策略检查的 IP 字面地址；绝不把原始 host 交给 dial。
+			target := net.JoinHostPort(resolved.IP.String(), port)
+			// conn、dialErr 保存对已验证 IP 的连接结果。
+			conn, dialErr := dial(ctx, network, target)
 			if dialErr == nil {
 				return conn, nil
 			}
