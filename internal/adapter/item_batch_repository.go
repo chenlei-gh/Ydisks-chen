@@ -367,7 +367,7 @@ func (r *ItemBatchRepository) FinalizeInterrupted(ctx context.Context, batchID, 
 	return r.store.PublishBatches.FinalizeInterrupted(ctx, batchID, workerToken, message)
 }
 
-// DeleteUpload 删除批次上传目录并清除数据库中的目录记录。
+// DeleteUpload 删除批次上传目录；只有文件系统清理成功后才清除数据库路径，失败时保留路径供后续重试。
 func (r *ItemBatchRepository) DeleteUpload(ctx context.Context, batchID, uploadDir string) error {
 	// err 表示适配器依赖校验错误。
 	if err := r.validate(); err != nil {
@@ -376,13 +376,12 @@ func (r *ItemBatchRepository) DeleteUpload(ctx context.Context, batchID, uploadD
 	if uploadDir == "" {
 		return nil
 	}
-	// removeErr 保存上传目录删除结果；即使删除失败也继续清理数据库记录。
-	removeErr := os.RemoveAll(uploadDir)
-	// clearErr 保存数据库上传目录字段清理结果。
-	clearErr := r.store.PublishBatches.ClearUploadDir(ctx, batchID)
-	if removeErr != nil {
+	// removeErr 保存上传目录删除结果；失败时保留数据库路径，避免孤儿目录失去重试索引。
+	if removeErr := os.RemoveAll(uploadDir); removeErr != nil {
 		return removeErr
 	}
+	// clearErr 保存文件系统删除成功后清理数据库路径的结果。
+	clearErr := r.store.PublishBatches.ClearUploadDir(ctx, batchID)
 	return clearErr
 }
 
