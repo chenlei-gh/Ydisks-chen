@@ -32,13 +32,15 @@ func (publisher *batchCheckpointRecoveryLocalPublisher) Complete(ctx context.Con
 		return errors.New("恢复结果为空")
 	}
 	publisher.itemID = result.ItemID
-	rawJSON, err := json.Marshal(result.RawData)
-	if err != nil {
-		return err
+	// rawJSON 保存恢复结果的原始 JSON。
+	rawJSON, marshalErr := json.Marshal(result.RawData)
+	if marshalErr != nil {
+		return marshalErr
 	}
-	marked, err := publisher.store.PublishBatches.MarkClaimedRowSuccess(ctx, row.ID, workerToken, result.ItemID, result.ItemURL, string(rawJSON))
-	if err != nil {
-		return err
+	// marked、markErr 保存当前 worker 写入成功检查点的结果及错误。
+	marked, markErr := publisher.store.PublishBatches.MarkClaimedRowSuccess(ctx, row.ID, workerToken, result.ItemID, result.ItemURL, string(rawJSON))
+	if markErr != nil {
+		return markErr
 	}
 	if !marked {
 		return itemapp.ErrBatchLeaseLost
