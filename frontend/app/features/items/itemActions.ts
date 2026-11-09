@@ -170,8 +170,8 @@ const getOrCreateSinglePublishOperationID = async (
 ): Promise<string> => {
   // imageEntries 保存商品图片和规格图片及其用途标识。
   const imageEntries = [
-    ...form.images.map(/* imageFile 表示当前商品主图文件。 */ imageFile => ({ role: 'item', file: imageFile })),
-    ...form.specs.flatMap(/* spec 表示当前商品规格维度。 */ spec => spec.values.flatMap(/* value 表示当前规格维度的规格值。 */ value => value.image ? [{ role: spec.specId + ':' + value.valueId, file: value.image }] : [])),
+    ...(form.images ?? []).map(/* imageFile 表示当前商品主图文件。 */ imageFile => ({ role: 'item', file: imageFile })),
+    ...(form.specs ?? []).flatMap(/* spec 表示当前商品规格维度。 */ spec => spec.values.flatMap(/* value 表示当前规格维度的规格值。 */ value => value.image ? [{ role: spec.specId + ':' + value.valueId, file: value.image }] : [])),
   ];
   // imageDigests 保存图片用途和浏览器可见元数据；服务端会独立计算图片内容 SHA-256。
   const imageDigests = imageEntries.map(/* entry 表示当前商品图片或规格图片。 */ entry =>
@@ -182,11 +182,11 @@ const getOrCreateSinglePublishOperationID = async (
     cookie_id: form.cookie_id, title: form.title, description: form.description,
     price: form.price, original_price: form.original_price, quantity: form.quantity,
     postage_mode: form.postage_mode, postage: form.postage,
-    specs: form.specs.map(/* spec 表示当前参与指纹计算的规格维度。 */ spec => ({
+    specs: (form.specs ?? []).map(/* spec 表示当前参与指纹计算的规格维度。 */ spec => ({
       specId: spec.specId, name: spec.name, supportImage: spec.supportImage,
       values: spec.values.map(/* specValue 表示当前规格维度的一个值。 */ specValue => ({ valueId: specValue.valueId, value: specValue.value })),
     })),
-    skuRows: form.skuRows, location, category, imageDigests,
+    skuRows: form.skuRows ?? [], location, category, imageDigests,
   });
   // digestHex 是当前完整表单的稳定短指纹，仅用于本地查找；服务端会独立计算 SHA-256。
   const digestHex = stablePublishHash(new TextEncoder().encode(canonical));
