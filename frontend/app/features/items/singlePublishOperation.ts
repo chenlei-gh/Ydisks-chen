@@ -1,6 +1,7 @@
 import { getSinglePublishOperation,publishItem } from './api';
 
 export { getSinglePublishOperation };
+// publishSingleItem 将普通发布 API 放入单商品发布 feature chunk。
 export const publishSingleItem = publishItem;
 import type { PublishLocation } from './api';
 import type { PublishCategory } from './types';
