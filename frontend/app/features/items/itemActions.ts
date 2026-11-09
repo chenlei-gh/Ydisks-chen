@@ -149,6 +149,20 @@ export interface ItemActionsState {
 
 
 // getOrCreateSinglePublishOperationID 在会话存储中按账号和完整表单内容复用发布操作 ID。
+// stablePublishHash 生成仅用于浏览器会话键的稳定短指纹；服务端仍以 SHA-256 重新校验真实请求。
+const stablePublishHash = (bytes: Uint8Array): string => {
+  // hashA 是第一组 32 位非密码学哈希状态。
+  let hashA = 2166136261;
+  // hashB 是第二组独立的 32 位非密码学哈希状态。
+  let hashB = 5381;
+  // byte 是当前输入中的单个字节。
+  for (const /* byte 是当前输入中的单个字节。 */ byte of bytes) {
+    hashA = Math.imul(hashA ^ byte, 16777619);
+    hashB = Math.imul(hashB, 33) ^ byte;
+  }
+  return (hashA >>> 0).toString(16).padStart(8, '0') + (hashB >>> 0).toString(16).padStart(8, '0');
+};
+
 const getOrCreateSinglePublishOperationID = async (
   form: PublishItemForm,
   location: PublishLocation | null,
