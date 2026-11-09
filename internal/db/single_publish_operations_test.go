@@ -157,6 +157,7 @@ func TestMultiDB_SinglePublishOperationsStateTransitions(t *testing.T) {
 			unknownOperation := operation
 			unknownOperation.OperationID += "-unknown"
 			unknownOperation.State = "prepared"
+			// createErr 保存创建 unknown prepared 检查点的数据库结果。
 			if createErr := repository.CreatePrepared(ctx, unknownOperation); createErr != nil {
 				t.Fatalf("CreatePrepared unknown: %v", createErr)
 			}
