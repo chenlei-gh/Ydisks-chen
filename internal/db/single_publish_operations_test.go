@@ -160,6 +160,7 @@ func TestMultiDB_SinglePublishOperationsStateTransitions(t *testing.T) {
 			if createErr := repository.CreatePrepared(ctx, unknownOperation); createErr != nil {
 				t.Fatalf("CreatePrepared unknown: %v", createErr)
 			}
+			// startErr 保存未知操作 prepared -> started 的状态迁移结果。
 			if startErr := repository.MarkStarted(ctx, operation.UserID, unknownOperation.OperationID); startErr != nil {
 				t.Fatalf("MarkStarted unknown: %v", startErr)
 			}
