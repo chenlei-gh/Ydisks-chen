@@ -10,8 +10,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-
 )
 
 // TestAIReplyUsesOptionalVisionModelForBuyerImages 验证视觉模型仅在配置且图片读取成功时接收多模态内容。
