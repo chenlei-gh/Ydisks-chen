@@ -9,14 +9,114 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: 判断改动范围
+    runs-on: ubuntu-24.04
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      smoke: ${{ steps.filter.outputs.smoke }}
+      multidb: ${{ steps.filter.outputs.multidb }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: 识别受影响的验证层
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # push 到 dev / 手动触发时，只比较当前分支最近一次提交；PR 事件会忽略此参数并比较 PR base。
+          base: ${{ github.ref }}
+          filters: |
+            go:
+              - '**/*.go'
+              - '**/testdata/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'internal/db/**'
+              - 'Makefile'
+              - '.env.example'
+              - '.golangci.yml'
+              - 'tools/**'
+              - 'api/**'
+              - 'migrations/**'
+              - 'docs/**'
+              - 'wiki/**'
+              - 'AGENTS.md'
+              - 'README*'
+              - 'CONTRIBUTING.md'
+              - 'P0_AUDIT.md'
+              - 'Dockerfile*'
+              - '.docker/**'
+              - '.dockerignore'
+              - 'compose*.yml'
+              - 'docker-compose*.yml'
+              - 'scripts/**'
+              - 'packaging/**'
+              - 'icon/**'
+              - '.gitignore'
+              - '.github/workflows/**'
+            frontend:
+              - 'frontend/**'
+              - 'api/openapi.yaml'
+              - 'internal/webui/static/**'
+              - 'Dockerfile*'
+              - '.docker/**'
+              - '.dockerignore'
+              - 'compose*.yml'
+              - 'docker-compose*.yml'
+              - 'scripts/**'
+              - 'packaging/**'
+              - 'icon/**'
+              - '.gitignore'
+              - '.github/workflows/**'
+            smoke:
+              - 'cmd/**'
+              - 'internal/**'
+              - 'tools/smoke/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Makefile'
+              - 'Dockerfile*'
+              - '.docker/**'
+              - '.dockerignore'
+              - 'compose*.yml'
+              - 'docker-compose*.yml'
+              - 'scripts/**'
+              - 'packaging/**'
+              - 'icon/**'
+              - '.gitignore'
+              - '.github/workflows/**'
+            multidb:
+              - 'internal/db/**'
+              - 'migrations/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Makefile'
+              - 'Dockerfile*'
+              - '.docker/**'
+              - '.dockerignore'
+              - 'compose*.yml'
+              - 'docker-compose*.yml'
+              - 'scripts/**'
+              - 'packaging/**'
+              - 'icon/**'
+              - '.gitignore'
+              - '.github/workflows/**'
+
   go:
     name: Go 检查
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: 检出代码
@@ -67,6 +167,8 @@ jobs:
 
   smoke:
     name: 冒烟测试
+    needs: changes
+    if: needs.changes.outputs.smoke == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: 检出代码
@@ -86,6 +188,8 @@ jobs:
 
   frontend:
     name: React 前端检查
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: 检出代码
@@ -122,6 +226,8 @@ jobs:
 
   multidb:
     name: MySQL/PostgreSQL 多数据库回归
+    needs: changes
+    if: needs.changes.outputs.multidb == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
