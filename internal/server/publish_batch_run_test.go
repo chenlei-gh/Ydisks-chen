@@ -633,7 +633,6 @@ func TestCreatePublishAutomationRules(t *testing.T) {
 // 编译期保证 mtop 包引用。
 var _ = mtop.NewClient
 
-
 // TestRunItemPublishBatchPreservesPartialSuccess 验证一行发布失败不会回滚或污染同批次已成功的其他行。
 func TestRunItemPublishBatchPreservesPartialSuccess(t *testing.T) {
 	// srv、cleanup 保存 HTTP 测试服务器和资源清理函数。
