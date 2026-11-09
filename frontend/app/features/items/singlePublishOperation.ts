@@ -1,4 +1,7 @@
-import { getSinglePublishOperation } from './api';
+import { getSinglePublishOperation,publishItem } from './api';
+
+export { getSinglePublishOperation };
+export const publishSingleItem = publishItem;
 import type { PublishLocation } from './api';
 import type { PublishCategory } from './types';
 import type { PublishItemForm } from './itemActions';
