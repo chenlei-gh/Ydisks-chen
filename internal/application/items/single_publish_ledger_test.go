@@ -294,7 +294,6 @@ func TestSinglePublishLedgerPreservesCookieWarning(t *testing.T) {
 	}
 }
 
-
 // TestSinglePublishLedgerRemoteCheckpointFailureNeverReplays 验证远端成功后检查点写入失败会保留 started 并阻止重复发布。
 func TestSinglePublishLedgerRemoteCheckpointFailureNeverReplays(t *testing.T) {
 	// checkpointErr 模拟平台成功后远端检查点的数据库提交失败。
