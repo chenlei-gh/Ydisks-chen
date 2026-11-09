@@ -219,7 +219,7 @@ func TestDialContextWithResolverPinsValidatedDNSResult(t *testing.T) {
 
 	// privateDialed 记录 DNS 仅返回私网地址时是否发生拨号。
 	privateDialed := false
-	// privateLookup 模拟攻击者在后续解析中将同一主机指向回环地址。
+	// privateLookup 模拟攻击者控制的域名解析结果指向回环地址。
 	privateLookup := func(context.Context, string) ([]net.IPAddr, error) {
 		return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
 	}
@@ -228,7 +228,7 @@ func TestDialContextWithResolverPinsValidatedDNSResult(t *testing.T) {
 		privateDialed = true
 		return nil, nil
 	}
-	// _, privateErr 保存私网解析结果的策略判定。
+	// privateErr 保存私网解析结果的策略判定。
 	_, privateErr := dialContextWithResolver(context.Background(), "tcp", "image.example.test:443",
 		privateLookup, privateDial, IsPublicIP, "拒绝访问非公网地址", "连接公网地址失败")
 	if privateErr == nil || privateErr.Error() != "拒绝访问非公网地址" || privateDialed {
