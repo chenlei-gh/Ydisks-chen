@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sashabaranov/go-openai"
+
 	"xianyu-go/internal/netguard"
 )
 
@@ -41,6 +43,44 @@ func isBuyerImageMessage(message ChatMessage) bool {
 	// messageExtra 保存平台消息扩展字段。
 	messageExtra, _ := messageBody["10"].(map[string]any)
 	return messageContentType(messageBody, messageExtra) == "2"
+}
+
+// prepareAIUserMessage 根据视觉模型配置构造本轮文本或图片消息，并返回所选模型及降级原因。
+func prepareAIUserMessage(ctx context.Context, message ChatMessage, textModel, visionModel string) (openai.ChatCompletionMessage, string, bool, string) {
+	// currentMessage 保存本轮买家输入；图片不会写入历史记录。
+	currentMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: message.Text}
+	// selectedModel 默认使用现有文本模型。
+	selectedModel := textModel
+	if !isBuyerImageMessage(message) {
+		return currentMessage, selectedModel, false, ""
+	}
+	if strings.TrimSpace(visionModel) == "" {
+		return openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: buyerImageFallbackText(message.Text, "尚未配置视觉模型")}, selectedModel, false, "尚未配置视觉模型"
+	}
+	// imageURL 保存平台消息中的第一张买家图片地址。
+	imageURL := extractBuyerImageURL(message)
+	if imageURL == "" {
+		return openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: buyerImageFallbackText(message.Text, "图片地址无法提取")}, selectedModel, false, "图片地址无法提取"
+	}
+	// imageDataURL 保存验证通过后供视觉模型读取的图片数据地址。
+	var imageDataURL string
+	// downloadErr 保存图片下载或格式验证失败的原因。
+	var downloadErr error
+	imageDataURL, downloadErr = downloadBuyerImageDataURL(ctx, imageURL)
+	if downloadErr != nil {
+		return openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: buyerImageFallbackText(message.Text, "图片读取失败")}, selectedModel, false, "图片读取失败"
+	}
+	selectedModel = strings.TrimSpace(visionModel)
+	currentMessage.Content = ""
+	currentMessage.MultiContent = make([]openai.ChatMessagePart, 0, 2)
+	if strings.TrimSpace(message.Text) != "" {
+		currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: message.Text})
+	}
+	currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{
+		Type:     openai.ChatMessagePartTypeImageURL,
+		ImageURL: &openai.ChatMessageImageURL{URL: imageDataURL, Detail: openai.ImageURLDetailLow},
+	})
+	return currentMessage, selectedModel, true, ""
 }
 
 // extractBuyerImageURL 仅从 contentType=2 的买家入站消息中提取第一张图片地址。
