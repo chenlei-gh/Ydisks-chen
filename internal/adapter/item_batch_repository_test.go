@@ -207,7 +207,6 @@ func TestItemBatchRepositoryPreservesUploadPathWhenRemovalFails(t *testing.T) {
 	}
 }
 
-
 // TestItemBatchRepositoryPreservesBatchWhenUploadRemovalFails 验证删除上传目录失败时批次记录仍保留以供重试。
 func TestItemBatchRepositoryPreservesBatchWhenUploadRemovalFails(t *testing.T) {
 	// store、cleanup 保存当前测试使用的 SQLite 存储及清理函数。
