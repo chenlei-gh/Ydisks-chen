@@ -136,6 +136,7 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 			if testCase.wantMultiPart {
 				// parts 保存多模态消息内容；有文字时包含文本和图片，无文字时只包含图片。
 				parts, ok := current["content"].([]any)
+				// expectedParts 是当前消息文字是否为空时应包含的多模态片段数。
 				expectedParts := 1
 				if strings.TrimSpace(testCase.messageText) != "" {
 					expectedParts = 2
