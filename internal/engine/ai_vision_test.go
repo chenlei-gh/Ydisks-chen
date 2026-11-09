@@ -49,7 +49,7 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// pngBytes 保存用于模拟买家上传图片的小尺寸 PNG。
+			// pngBuffer 保存用于模拟买家上传图片的小尺寸 PNG。
 			var pngBuffer bytes.Buffer
 			// err 表示构造测试 PNG 图片时的编码错误。
 			if err := png.Encode(&pngBuffer, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
