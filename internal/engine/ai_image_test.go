@@ -129,9 +129,15 @@ func TestDownloadBuyerImageDataURLRejectsInvalidAndOversizedImages(t *testing.T)
 
 // TestDownloadBuyerImageDataURLRejectsLoopback 验证买家图片下载始终使用公网访问策略。
 func TestDownloadBuyerImageDataURLRejectsLoopback(t *testing.T) {
-	// newBuyerImageHTTPClient 恢复生产默认值，确保测试实际验证 PublicHTTPClient。
+	// data 是有效图片字节；若公网策略失效，测试服务器会成功返回该图片。
+	data := buyerPNGForTest(t, 1, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(data)
+	}))
+	defer server.Close()
+	// newBuyerImageHTTPClient 使用生产公网客户端，真实验证回环目标在有服务监听时仍被拒绝。
 	withBuyerImageHTTPClient(t, netguard.PublicHTTPClient(buyerImageTimeout))
-	if _, err := downloadBuyerImageDataURL(context.Background(), "http://127.0.0.1:12345/image.png"); err == nil {
+	if _, err := downloadBuyerImageDataURL(context.Background(), server.URL); err == nil {
 		t.Fatal("回环地址必须被公网策略拒绝")
 	}
 }
