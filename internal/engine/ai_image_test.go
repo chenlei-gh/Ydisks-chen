@@ -159,3 +159,32 @@ func TestBuyerImageFallbackTextPreventsGuessing(t *testing.T) {
 		t.Fatalf("图片降级说明不完整: %q", fallback)
 	}
 }
+
+
+// TestDownloadBuyerImageDataURLRejectsCrossHostRedirect 验证买家图片入口拒绝跳转到另一主机。
+func TestDownloadBuyerImageDataURLRejectsCrossHostRedirect(t *testing.T) {
+	// data 是有效图片字节；若重定向策略失效，目标服务器会成功接收请求。
+	data := buyerPNGForTest(t, 1, 1)
+	// target 记录跨主机跳转是否真正到达目标服务器。
+	targetReached := false
+	// target 是重定向不应访问的第二个主机。
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		targetReached = true
+		_, _ = w.Write(data)
+	}))
+	defer target.Close()
+	// redirector 返回指向另一个主机的跳转响应。
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	defer redirector.Close()
+	// 使用同一 netguard 重定向规则，但关闭公网地址限制以便测试访问本机 HTTP 服务。
+	withBuyerImageHTTPClient(t, netguard.PolicyHTTPClient(netguard.NewOutboundPolicy(false), buyerImageTimeout))
+	// err 表示图片入口错误地接受了跨主机跳转。
+	if _, err := downloadBuyerImageDataURL(context.Background(), redirector.URL); err == nil {
+		t.Fatal("买家图片下载必须拒绝跨主机重定向")
+	}
+	if targetReached {
+		t.Fatal("跨主机重定向目标不应收到请求")
+	}
+}
