@@ -339,6 +339,7 @@ export const useItemActions = ({ selectedAccount, setSelectedAccount, setItems, 
     let operationID = '';
     // operationModule 和 publishAPI 保存用户启动发布后才加载的恢复逻辑与 API。
     let operationModule: typeof import('./singlePublishOperation') | null = null;
+    // publishAPI 保存按需加载的商品发布请求和状态查询接口。
     let publishAPI: typeof import('./api') | null = null;
     try {
       operationModule = await import('./singlePublishOperation');
