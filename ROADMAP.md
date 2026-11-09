@@ -140,9 +140,9 @@
 
 此前对独立 AI Fork 的比较发现了值得借鉴的方向，但不直接 cherry-pick；逐项与当前主线实现比较后决定是否吸收：
 
-- [ ] 5.1 商品级 AI 策略：核对现有商品专属提示词、资料、继承/覆盖规则和管理入口，找出真实缺口。
-- [ ] 5.2 买家图片理解：审计图片来源、下载链路、格式验证、大小/像素预算、超时和文本降级。
-- [ ] 5.3 图片网络安全：验证 DNS 解析与连接目标、私网/保留地址阻断、重定向跨主机限制和下载器实际使用的 HTTP client；不能仅凭存在 `netguard` 就认定 SSRF 防护完整。
+- [x] 5.1 商品级 AI 策略：已审计商品级启停/继承、专属上下文、归属校验、AI 回复覆盖和前端管理入口；现有实现覆盖目标，本轮没有证据支持重复开发。
+- [~] 5.2 买家图片理解：PR #15 已实现可选视觉模型、图片消息提取、下载与格式/大小/像素限制、文本降级及图片不可信规则；Go、多数据库和冒烟 CI 已通过，前端构建产物同步仍阻塞最终验收与合并。
+- [~] 5.3 图片网络安全：已核对 PR #15 下载器实际调用 `netguard.PublicHTTPClient`，并审阅 DNS 解析后直连已验证 IP、私网/回环/主要保留网段拒绝、禁用连接复用及同主机重定向策略；仍需补充针对 DNS rebinding 和买家图片下载跨主机重定向的定向回归证据。
 - [ ] 5.4 人工接管：定义自动回复、人工接管、恢复自动回复的明确状态；处理 AI 请求在途时人工接管的竞争条件，避免接管后旧 AI 回复仍发出。
 - [ ] 5.5 会话上下文：把人工回复纳入上下文；建立消息条数、字符数和 token 预算、摘要与截断优先级。
 - [ ] 5.6 AI 重试：仅对可恢复错误进行有限重试；处理 429 / 5xx / 网络错误、取消和整体超时；避免图片失败降级后再重试导致调用次数超预算。
@@ -291,6 +291,15 @@
 - 新增回归测试：`TestItemBatchRepositoryPreservesUploadPathWhenRemovalFails`、`TestItemBatchRepositoryPreservesBatchWhenUploadRemovalFails`。通过非法路径触发操作系统删除错误，验证数据库路径/批次记录保留。
 - 边界：过期清理仍由批量预检 HTTP 请求触发，没有新增后台定时任务；远端闲鱼图片删除/回收能力没有证据，未实现远端清理。
 - 验收范围：本地文件系统失败后的重试索引和批次记录完整性已通过 CI 验证；不等于真实闲鱼商品/图片平台 E2E。
+
+### 2026-11-10 阶段 5 AI 客服审计进展
+
+- **5.1 商品级 AI 策略审计完成**：已核对 `internal/application/items/item_ai_settings.go`、`internal/db/item_ai_settings.go`、`internal/application/items/item_ai_settings_test.go`、`frontend/app/features/items/components/ItemAISettingsModal.tsx` 与 `internal/engine/ai.go`。现有商品级启用/禁用/继承、商品上下文、owner checks、AI reply override 和管理入口均已有实现与测试；没有证据支持再造一套商品级策略系统。
+- **5.2 买家图片理解仍在 PR #15**：最新已审阅 CI run [42645840126](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42645840126)：Go 检查、MySQL/PostgreSQL 多数据库回归、真实二进制 + SQLite 冒烟均成功；React 的 TypeScript、前端测试和 OpenAPI 产物检查成功，只有 `npm run build` 后嵌入式静态资源与仓库内容不一致导致 job 失败。PR #15 仍未合并，静态资源同步需等用户恢复电脑环境，不要求当前操作。
+- **5.3 图片网络安全审计部分完成**：`internal/engine/ai_image.go` 明确使用 `netguard.PublicHTTPClient(8s)`，不是用户可配置的普通 HTTP client；下载器还自行校验 HTTP(S)、拒绝 URL userinfo、要求 HTTP 200、限制 5 MiB、按字节解码 JPEG/PNG 并限制 16 MP。`internal/netguard/http.go` 的公网拨号会解析 DNS 后逐个校验 IP，并直接拨号到已验证 IP，避免校验后再次解析；公网客户端禁用 keep-alive，每次连接重新校验，限制最多 5 次重定向且拒绝跨主机跳转。现有 `netguard` 测试覆盖常见私网/回环/链路本地/文档地址、回环访问拒绝、跨主机重定向拒绝；PR #15 图片测试也验证生产公网客户端拒绝回环图片地址。
+- **未完成的 5.3 证据**：尚无专门 DNS rebinding 测试证明同一域名在解析结果变化时不会连接到私网 IP；跨主机重定向测试目前在通用策略客户端层，不是从买家图片下载入口直接验证。当前代码路径有防护设计，但在补齐定向回归前不把 5.3 标记完成。
+- **安全边界观察**：图片字节限制和 `DecodeConfig` 像素限制已存在；当前只读取图片配置头，不在本地完整解码/重编码图片。该实现限制了下载体积和声明尺寸，但不能把它描述为已对任意恶意图片完成完整解码安全验证。视觉模型服务端仍需按其自身规则解析 data URL。
+
 
 ### 2026-11-09 阶段 4 验收状态更新
 
