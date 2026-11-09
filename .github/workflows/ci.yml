@@ -59,6 +59,9 @@ jobs:
               - 'compose*.yml'
               - 'docker-compose*.yml'
               - 'scripts/**'
+              - 'packaging/**'
+              - 'icon/**'
+              - '.gitignore'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
@@ -70,6 +73,9 @@ jobs:
               - 'compose*.yml'
               - 'docker-compose*.yml'
               - 'scripts/**'
+              - 'packaging/**'
+              - 'icon/**'
+              - '.gitignore'
               - '.github/workflows/**'
             smoke:
               - 'cmd/server/**'
@@ -88,6 +94,9 @@ jobs:
               - 'compose*.yml'
               - 'docker-compose*.yml'
               - 'scripts/**'
+              - 'packaging/**'
+              - 'icon/**'
+              - '.gitignore'
               - '.github/workflows/**'
             multidb:
               - 'internal/db/**'
@@ -100,6 +109,9 @@ jobs:
               - 'compose*.yml'
               - 'docker-compose*.yml'
               - 'scripts/**'
+              - 'packaging/**'
+              - 'icon/**'
+              - '.gitignore'
               - '.github/workflows/**'
 
   go:
