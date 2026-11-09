@@ -180,6 +180,62 @@ func TestDialContextWithPolicyBranches(t *testing.T) {
 	successConn.Close()
 }
 
+// TestDialContextWithResolverPinsValidatedDNSResult 验证 DNS 结果变化时只拨号到本次已校验的 IP 字面地址。
+func TestDialContextWithResolverPinsValidatedDNSResult(t *testing.T) {
+	// lookupCalls 统计本次连接流程执行 DNS 查询的次数。
+	lookupCalls := 0
+	// dialed 保存拨号器实际收到的连接目标。
+	dialed := make([]string, 0, 2)
+	// dialFailure 让测试在记录连接目标后稳定结束，不访问真实公网。
+	dialFailure := errors.New("stop after observing pinned target")
+	// lookup 模拟一次解析同时返回公网地址和私网地址，代表域名解析结果可能变化或包含混合记录。
+	lookup := func(_ context.Context, host string) ([]net.IPAddr, error) {
+		lookupCalls++
+		if host != "image.example.test" {
+			t.Fatalf("DNS 查询主机错误: %s", host)
+		}
+		return []net.IPAddr{
+			{IP: net.ParseIP("8.8.8.8")},
+			{IP: net.ParseIP("127.0.0.1")},
+		}, nil
+	}
+	// dial 记录目标并返回错误，确保测试只验证拨号目标而不建立网络连接。
+	dial := func(_ context.Context, _ string, address string) (net.Conn, error) {
+		dialed = append(dialed, address)
+		return nil, dialFailure
+	}
+	// conn、err 保存使用注入 DNS 和拨号端口后的连接结果。
+	conn, err := dialContextWithResolver(context.Background(), "tcp", "image.example.test:443",
+		lookup, dial, IsPublicIP, "拒绝访问非公网地址", "连接公网地址失败")
+	if conn != nil || !errors.Is(err, dialFailure) {
+		t.Fatalf("应返回已验证公网地址的拨号错误: conn=%v err=%v", conn, err)
+	}
+	if lookupCalls != 1 {
+		t.Fatalf("一次连接必须只解析一次 DNS，实际次数=%d", lookupCalls)
+	}
+	if len(dialed) != 1 || dialed[0] != "8.8.8.8:443" {
+		t.Fatalf("只能拨号到已验证的公网 IP，实际目标=%v", dialed)
+	}
+
+	// privateDialed 记录 DNS 仅返回私网地址时是否发生拨号。
+	privateDialed := false
+	// privateLookup 模拟攻击者在后续解析中将同一主机指向回环地址。
+	privateLookup := func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+	}
+	// privateDial 不应被调用，因为该解析结果没有任何允许的地址。
+	privateDial := func(context.Context, string, string) (net.Conn, error) {
+		privateDialed = true
+		return nil, nil
+	}
+	// _, privateErr 保存私网解析结果的策略判定。
+	_, privateErr := dialContextWithResolver(context.Background(), "tcp", "image.example.test:443",
+		privateLookup, privateDial, IsPublicIP, "拒绝访问非公网地址", "连接公网地址失败")
+	if privateErr == nil || privateErr.Error() != "拒绝访问非公网地址" || privateDialed {
+		t.Fatalf("解析到私网地址必须在拨号前拒绝: dialed=%v err=%v", privateDialed, privateErr)
+	}
+}
+
 // TestIsPublicIP 封装TestIsPublicIP业务协调。
 func TestIsPublicIP(t *testing.T) {
 	// raw 表示当前遍历过程中的原始
