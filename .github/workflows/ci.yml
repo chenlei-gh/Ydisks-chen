@@ -46,6 +46,7 @@ jobs:
               - '.golangci.yml'
               - 'tools/**'
               - 'api/**'
+              - 'migrations/**'
               - 'docs/**'
               - 'wiki/**'
               - 'Makefile'
