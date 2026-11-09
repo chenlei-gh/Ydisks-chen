@@ -148,19 +148,26 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 	currentMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: m.Text}
 	// requestModel 默认沿用文本模型，只有图片成功读取时才切换到可选视觉模型。
 	requestModel := aiCfg.Model
-	if imageURL := extractBuyerImageURL(m); imageURL != "" {
+	if isBuyerImageMessage(m) {
+		imageURL := extractBuyerImageURL(m)
 		if aiCfg.VisionModel == "" {
 			currentMessage.Content = buyerImageFallbackText(m.Text, "尚未配置视觉模型")
+		} else if imageURL == "" {
+			currentMessage.Content = buyerImageFallbackText(m.Text, "图片地址无法提取")
 		} else if imageDataURL, imageErr := downloadBuyerImageDataURL(ctx, imageURL); imageErr != nil {
 			a.logger.Warn("买家图片无法读取，回退文本模型", "err", imageErr)
 			currentMessage.Content = buyerImageFallbackText(m.Text, "图片读取失败")
 		} else {
 			requestModel = aiCfg.VisionModel
 			currentMessage.Content = ""
-			currentMessage.MultiContent = []openai.ChatMessagePart{
-				{Type: openai.ChatMessagePartTypeText, Text: m.Text},
-				{Type: openai.ChatMessagePartTypeImageURL, ImageURL: &openai.ChatMessageImageURL{URL: imageDataURL, Detail: openai.ImageURLDetailLow}},
+			currentMessage.MultiContent = make([]openai.ChatMessagePart, 0, 2)
+			if strings.TrimSpace(m.Text) != "" {
+				currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: m.Text})
 			}
+			currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{
+				Type: openai.ChatMessagePartTypeImageURL,
+				ImageURL: &openai.ChatMessageImageURL{URL: imageDataURL, Detail: openai.ImageURLDetailLow},
+			})
 			messages[0].Content += buyerImageTrustRule
 		}
 	}
