@@ -154,14 +154,14 @@ const readPublishFileBytes = async (file: File): Promise<Uint8Array> => {
   if (typeof file.arrayBuffer === 'function') {
     return new Uint8Array(await file.arrayBuffer());
   }
-  return new Promise((resolve, reject) => {
+  return new Promise(/* readResult、readError 接收 FileReader 的读取结果或错误。 */ (readResult, readError) => {
     // reader 是当前图片的兼容读取器。
     const reader = new FileReader();
-    reader.onload = () => {
-      if (reader.result instanceof ArrayBuffer) resolve(new Uint8Array(reader.result));
-      else reject(new Error('无法读取商品图片内容'));
+    reader.onload = /* onLoad 处理图片读取完成事件。 */ () => {
+      if (reader.result instanceof ArrayBuffer) readResult(new Uint8Array(reader.result));
+      else readError(new Error('无法读取商品图片内容'));
     };
-    reader.onerror = () => reject(reader.error ?? new Error('读取商品图片失败'));
+    reader.onerror = /* onError 处理图片读取失败事件。 */ () => readError(reader.error ?? new Error('读取商品图片失败'));
     reader.readAsArrayBuffer(file);
   });
 };
@@ -171,8 +171,7 @@ const stablePublishHash = (bytes: Uint8Array): string => {
   // hashA、hashB 是两组独立的 32 位非密码学哈希状态。
   let hashA = 2166136261;
   let hashB = 5381;
-  // byte 是当前输入中的单个字节。
-  for (const byte of bytes) {
+  for (const /* byte 是当前输入中的单个字节。 */ byte of bytes) {
     hashA = Math.imul(hashA ^ byte, 16777619);
     hashB = Math.imul(hashB, 33) ^ byte;
   }
