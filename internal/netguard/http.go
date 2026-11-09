@@ -260,7 +260,7 @@ func dialContextWithPolicy(ctx context.Context, network, address string, timeout
 	// dialer 只负责连接已完成策略校验的 IP，不再接收原始主机名。
 	dialer := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
 	return dialContextWithResolver(ctx, network, address, net.DefaultResolver.LookupIPAddr, dialer.DialContext,
-		timeout, allow, deniedMessage, connectErrorMessage)
+		allow, deniedMessage, connectErrorMessage)
 }
 
 // dialContextWithResolver 将 DNS 解析与拨号端口显式分离，确保连接目标只能来自本次已校验的解析结果。
@@ -268,7 +268,7 @@ func dialContextWithPolicy(ctx context.Context, network, address string, timeout
 func dialContextWithResolver(ctx context.Context, network, address string,
 	lookup func(context.Context, string) ([]net.IPAddr, error),
 	dial func(context.Context, string, string) (net.Conn, error),
-	timeout time.Duration, allow func(net.IP) bool, deniedMessage, connectErrorMessage string,
+	allow func(net.IP) bool, deniedMessage, connectErrorMessage string,
 ) (net.Conn, error) {
 	// host、port、err 用于本次流程后续判断的host、port、err。
 	host, port, err := net.SplitHostPort(address)
