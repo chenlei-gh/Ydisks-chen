@@ -144,14 +144,34 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 		}
 		messages = append(messages, openai.ChatCompletionMessage{Role: role, Content: truncateAIContent(message.Content)})
 	}
-	messages = append(messages, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: m.Text})
+	// currentMessage 保存本轮买家输入；图片只作为当前请求的多模态内容，不写入历史记录。
+	currentMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: m.Text}
+	// requestModel 默认沿用文本模型，只有图片成功读取时才切换到可选视觉模型。
+	requestModel := aiCfg.Model
+	if imageURL := extractBuyerImageURL(m); imageURL != "" {
+		if aiCfg.VisionModel == "" {
+			currentMessage.Content = buyerImageFallbackText(m.Text, "尚未配置视觉模型")
+		} else if imageDataURL, imageErr := downloadBuyerImageDataURL(ctx, imageURL); imageErr != nil {
+			a.logger.Warn("买家图片无法读取，回退文本模型", "err", imageErr)
+			currentMessage.Content = buyerImageFallbackText(m.Text, "图片读取失败")
+		} else {
+			requestModel = aiCfg.VisionModel
+			currentMessage.Content = ""
+			currentMessage.MultiContent = []openai.ChatMessagePart{
+				{Type: openai.ChatMessagePartTypeText, Text: m.Text},
+				{Type: openai.ChatMessagePartTypeImageURL, ImageURL: &openai.ChatMessageImageURL{URL: imageDataURL, Detail: openai.ImageURLDetailLow}},
+			}
+			messages[0].Content += buyerImageTrustRule
+		}
+	}
+	messages = append(messages, currentMessage)
 
 	// aiCtx、cancel 用于本次流程后续判断的人工智能Ctx、cancel
 	aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	// resp、err 用于本次流程后续判断的resp、err
 	resp, err := client.CreateChatCompletion(aiCtx, openai.ChatCompletionRequest{
-		Model:       aiCfg.Model,
+		Model:       requestModel,
 		Messages:    messages,
 		Temperature: 0.7,
 	})
@@ -235,9 +255,10 @@ func (a *AIReplierImpl) conversationContext(ctx context.Context, m ChatMessage) 
 
 // globalAIConfig 用于本次流程后续判断的globalAI配置
 type globalAIConfig struct {
-	APIKey  string
-	BaseURL string
-	Model   string
+	APIKey     string
+	BaseURL    string
+	Model      string
+	VisionModel string
 }
 
 // globalAIConfig 封装globalAI配置业务协调。
@@ -263,6 +284,11 @@ func (a *AIReplierImpl) globalAIConfig(ctx context.Context) (*globalAIConfig, er
 	if err != nil {
 		return nil, err
 	}
+	// visionModel 是可选的买家图片理解模型；空值时不下载图片。
+	visionModel, err := a.store.Settings.Get(ctx, "ai_vision_model")
+	if err != nil {
+		return nil, err
+	}
 
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
@@ -275,7 +301,8 @@ func (a *AIReplierImpl) globalAIConfig(ctx context.Context) (*globalAIConfig, er
 	return &globalAIConfig{
 		APIKey:  strings.TrimSpace(apiKey),
 		BaseURL: baseURL,
-		Model:   model,
+		Model:       model,
+		VisionModel: strings.TrimSpace(visionModel),
 	}, nil
 }
 
