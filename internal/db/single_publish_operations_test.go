@@ -109,3 +109,71 @@ func TestSinglePublishOperationsUnknownCannotBeStartedAgain(t *testing.T) {
 		t.Fatalf("unexpected unknown operation: %+v", stored)
 	}
 }
+
+// TestMultiDB_SinglePublishOperationsStateTransitions 验证发布账本状态迁移在所有 CI 数据库方言中一致。
+func TestMultiDB_SinglePublishOperationsStateTransitions(t *testing.T) {
+	// target 保存本轮可用的 SQLite、MySQL 和 PostgreSQL 数据库目标。
+	for _, target := range allTestTargets(t) {
+		// target 是当前子测试独占的数据库目标副本。
+		target := target
+		t.Run(target.name, func(t *testing.T) {
+			defer target.cleanup()
+			// ctx 是当前数据库目标共用的非取消上下文。
+			ctx := context.Background()
+			// repository 是绑定当前数据库方言的发布操作仓储。
+			repository := &SinglePublishOperations{DB: target.store.DB}
+			// operation 保存当前数据库目标的唯一发布操作身份。
+			operation := SinglePublishOperation{
+				OperationID: "multidb-single-publish-" + target.name, UserID: 71, CookieID: "account-" + target.name,
+				RequestFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				State:              "prepared",
+			}
+			// createErr 保存当前方言创建 prepared 检查点的结果。
+			if createErr := repository.CreatePrepared(ctx, operation); createErr != nil {
+				t.Fatalf("CreatePrepared: %v", createErr)
+			}
+			// duplicateErr 验证当前方言的唯一约束阻止重复操作 ID。
+			if duplicateErr := repository.CreatePrepared(ctx, operation); duplicateErr == nil {
+				t.Fatal("duplicate operation ID unexpectedly accepted")
+			}
+			// startErr 保存 prepared -> started 的条件状态迁移结果。
+			if startErr := repository.MarkStarted(ctx, operation.UserID, operation.OperationID); startErr != nil {
+				t.Fatalf("MarkStarted: %v", startErr)
+			}
+			// remoteErr 保存 started -> remote_confirmed 的远端结果检查点。
+			if remoteErr := repository.MarkRemoteConfirmed(ctx, operation.UserID, operation.OperationID, "remote-"+target.name, "https://example.invalid/item", `{"item_id":"remote"}`); remoteErr != nil {
+				t.Fatalf("MarkRemoteConfirmed: %v", remoteErr)
+			}
+			// localErr 保存 remote_confirmed -> local_confirmed 的本地收口结果。
+			if localErr := repository.MarkLocalConfirmed(ctx, operation.UserID, operation.OperationID); localErr != nil {
+				t.Fatalf("MarkLocalConfirmed: %v", localErr)
+			}
+			// stored、readErr 保存当前方言最终读取的操作快照和错误。
+			stored, readErr := repository.GetForUser(ctx, operation.UserID, operation.OperationID)
+			if readErr != nil || stored.State != "local_confirmed" || stored.ItemID != "remote-"+target.name {
+				t.Fatalf("stored operation=%+v err=%v", stored, readErr)
+			}
+			// unknownOperation 是验证未知结果隔离的独立操作。
+			unknownOperation := operation
+			unknownOperation.OperationID += "-unknown"
+			unknownOperation.State = "prepared"
+			// createErr 保存创建 unknown prepared 检查点的数据库结果。
+			if createErr := repository.CreatePrepared(ctx, unknownOperation); createErr != nil {
+				t.Fatalf("CreatePrepared unknown: %v", createErr)
+			}
+			// startErr 保存未知操作 prepared -> started 的状态迁移结果。
+			if startErr := repository.MarkStarted(ctx, operation.UserID, unknownOperation.OperationID); startErr != nil {
+				t.Fatalf("MarkStarted unknown: %v", startErr)
+			}
+			// unknownErr 保存 started -> unknown 的隔离迁移结果。
+			if unknownErr := repository.MarkUnknown(ctx, operation.UserID, unknownOperation.OperationID, "平台响应丢失"); unknownErr != nil {
+				t.Fatalf("MarkUnknown: %v", unknownErr)
+			}
+			// restartErr 验证 unknown 不允许重新进入 started。
+			restartErr := repository.MarkStarted(ctx, operation.UserID, unknownOperation.OperationID)
+			if !errors.Is(restartErr, ErrSinglePublishOperationChanged) {
+				t.Fatalf("MarkStarted after unknown error=%v", restartErr)
+			}
+		})
+	}
+}

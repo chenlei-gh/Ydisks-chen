@@ -13,6 +13,10 @@ type ledgerTestFake struct {
 	mu sync.Mutex
 	// operations 保存测试用户的发布操作快照。
 	operations map[string]PublishOperation
+	// remoteConfirmedErr 模拟远端成功后写入远端检查点失败。
+	remoteConfirmedErr error
+	// localConfirmedErr 模拟本地商品保存后写入最终账本状态失败。
+	localConfirmedErr error
 }
 
 // newLedgerTestFake 创建空的持久化发布操作测试仓储。
@@ -51,6 +55,9 @@ func (l *ledgerTestFake) MarkStarted(_ context.Context, userID int64, operationI
 
 // MarkRemoteConfirmed 保存测试平台返回的远端结果。
 func (l *ledgerTestFake) MarkRemoteConfirmed(_ context.Context, userID int64, operationID, itemID, itemURL, rawJSON string, message ...string) error {
+	if l.remoteConfirmedErr != nil {
+		return l.remoteConfirmedErr
+	}
 	return l.transition(userID, operationID, "started", "remote_confirmed", func(operation *PublishOperation) {
 		operation.ItemID, operation.ItemURL, operation.RawJSON = itemID, itemURL, rawJSON
 		if len(message) > 0 {
@@ -61,6 +68,12 @@ func (l *ledgerTestFake) MarkRemoteConfirmed(_ context.Context, userID int64, op
 
 // MarkLocalConfirmed 将测试操作标记为本地收口完成。
 func (l *ledgerTestFake) MarkLocalConfirmed(_ context.Context, userID int64, operationID string, message ...string) error {
+	if l.localConfirmedErr != nil {
+		// err 保存本次模拟的收口失败，并在下一次恢复尝试前清除。
+		err := l.localConfirmedErr
+		l.localConfirmedErr = nil
+		return err
+	}
 	return l.transition(userID, operationID, "remote_confirmed", "local_confirmed", func(operation *PublishOperation) {
 		if len(message) > 0 {
 			operation.ErrorMessage = message[0]
@@ -278,5 +291,84 @@ func TestSinglePublishLedgerPreservesCookieWarning(t *testing.T) {
 	}
 	if publisher.calls != 1 {
 		t.Fatalf("publisher calls=%d want 1", publisher.calls)
+	}
+}
+
+// TestSinglePublishLedgerRemoteCheckpointFailureNeverReplays 验证远端成功后检查点写入失败会保留 started 并阻止重复发布。
+func TestSinglePublishLedgerRemoteCheckpointFailureNeverReplays(t *testing.T) {
+	// checkpointErr 模拟平台成功后远端检查点的数据库提交失败。
+	checkpointErr := errors.New("remote checkpoint commit failed")
+	// ledger 保存拒绝远端成功检查点的测试账本。
+	ledger := newLedgerTestFake()
+	ledger.remoteConfirmedErr = checkpointErr
+	// publisher 保存已经返回真实商品结果的平台替身。
+	publisher := &ledgerPublisherFake{result: &PublishResult{ItemID: "item-remote-confirmed"}}
+	// repository 保存本地商品仓储替身。
+	repository := &ledgerRepositoryFake{}
+	// service、err 保存启用发布账本的应用服务及构造错误。
+	service, err := NewServiceWithOperationLedger(publisher, repository, ledger)
+	if err != nil {
+		t.Fatalf("NewServiceWithOperationLedger error: %v", err)
+	}
+	// input 保存本次发布使用的稳定操作 ID 和内容指纹。
+	input := PublishInput{UserID: 7, CookieID: "account-7", OperationID: "op-remote-checkpoint-failure", RequestFingerprint: "fp-a"}
+	// firstErr 保存远端成功但本地远端检查点提交失败的结果。
+	_, firstErr := service.PublishSingle(context.Background(), input)
+	if firstErr == nil {
+		t.Fatal("remote checkpoint persistence failure should be returned")
+	}
+	// operation、readErr 保存失败后必须保留的 started 状态。
+	operation, readErr := ledger.GetForUser(context.Background(), 7, input.OperationID)
+	if readErr != nil || operation.State != "started" {
+		t.Fatalf("operation=%+v err=%v want started", operation, readErr)
+	}
+	// retryErr 验证同一操作只能进入人工核对，不能再次调用平台。
+	_, retryErr := service.PublishSingle(context.Background(), input)
+	if !errors.Is(retryErr, ErrPublishOperationUncertain) {
+		t.Fatalf("retry error=%v want ErrPublishOperationUncertain", retryErr)
+	}
+	if publisher.calls != 1 || repository.calls != 0 {
+		t.Fatalf("publisher calls=%d repository calls=%d want 1 and 0", publisher.calls, repository.calls)
+	}
+}
+
+// TestSinglePublishLedgerRecoversFinalStateCommitFailure 验证本地商品已保存但最终账本提交失败时只恢复本地收尾。
+func TestSinglePublishLedgerRecoversFinalStateCommitFailure(t *testing.T) {
+	// ledger 保存首次拒绝 local_confirmed、随后允许恢复的测试账本。
+	ledger := newLedgerTestFake()
+	ledger.localConfirmedErr = errors.New("final state commit failed")
+	// publisher 保存固定远端结果的平台替身。
+	publisher := &ledgerPublisherFake{result: &PublishResult{ItemID: "item-final-state"}}
+	// repository 保存本地商品 Upsert 次数。
+	repository := &ledgerRepositoryFake{}
+	// service、err 保存启用发布账本的应用服务及构造错误。
+	service, err := NewServiceWithOperationLedger(publisher, repository, ledger)
+	if err != nil {
+		t.Fatalf("NewServiceWithOperationLedger error: %v", err)
+	}
+	// input 保存本次发布使用的稳定操作 ID 和内容指纹。
+	input := PublishInput{UserID: 7, CookieID: "account-7", OperationID: "op-final-state-failure", RequestFingerprint: "fp-a"}
+	// firstErr 保存首次本地商品写入成功、最终账本收口失败的结果。
+	_, firstErr := service.PublishSingle(context.Background(), input)
+	if firstErr == nil {
+		t.Fatal("final state persistence failure should be returned")
+	}
+	// operation、readErr 保存首次失败后可恢复的远端确认状态。
+	operation, readErr := ledger.GetForUser(context.Background(), 7, input.OperationID)
+	if readErr != nil || operation.State != "remote_confirmed" {
+		t.Fatalf("operation=%+v err=%v want remote_confirmed", operation, readErr)
+	}
+	// second、retryErr 保存仅恢复本地收尾的第二次调用结果。
+	second, retryErr := service.PublishSingle(context.Background(), input)
+	if retryErr != nil || second.Result == nil || second.Result.ItemID != "item-final-state" {
+		t.Fatalf("second outcome=%+v err=%v", second, retryErr)
+	}
+	// finalState、finalReadErr 保存恢复后的最终状态。
+	finalState, finalReadErr := ledger.GetForUser(context.Background(), 7, input.OperationID)
+	if finalReadErr != nil || finalState.State != "local_confirmed" {
+		t.Fatalf("final operation=%+v err=%v", finalState, finalReadErr)
+	}
+	if publisher.calls != 1 || repository.calls != 2 {
+		t.Fatalf("publisher calls=%d repository calls=%d want 1 and 2", publisher.calls, repository.calls)
 	}
 }
