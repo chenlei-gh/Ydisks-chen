@@ -146,9 +146,11 @@ describe('useItemActions 分支', /* 当前套件覆盖校验提示、异常路�
     expect(alertMock).toHaveBeenLastCalledWith('商品发布成功');
     expect(harnessState.onConfigureDelivery).not.toHaveBeenCalled();
     act(/* 当前回调再次写入合法表单。 */ () => hook.result.current.setPublishForm(validForm()));
+    vi.mocked(api.getSinglePublishOperation).mockResolvedValue({ operation_id: 'op-retry', state: 'prepared', item_id: '', item_url: '' });
     vi.mocked(api.publishItem).mockRejectedValueOnce(new Error('pub-bad'));
     await act(/* 当前回调发布失败。 */ async () => hook.result.current.handlePublishItem());
-    expect(alertMock).toHaveBeenLastCalledWith('pub-bad');
+    expect(alertMock).toHaveBeenLastCalledWith(expect.stringContaining('pub-bad'));
+    expect(alertMock).toHaveBeenLastCalledWith(expect.stringContaining('可在不改变表单内容的情况下安全重试'));
     expect(hook.result.current.publishing).toBe(false);
     hook.unmount();
   });
