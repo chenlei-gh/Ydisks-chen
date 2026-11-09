@@ -142,7 +142,7 @@ describe('useItemActions 分支', /* 当前套件覆盖校验提示、异常路�
     const hook = renderHook(/* renderActions 渲染商品动作 Hook。 */ () => useHarness('account-1'));
     act(/* 当前回调写入多规格表单。 */ () => hook.result.current.setPublishForm(validForm({ specs: [{}] as never, skuRows: [{ price: '1', quantity: '2' }, { price: '1', quantity: '3' }] as never })));
     await act(/* 当前回调发布成功但没有商品 ID。 */ async () => hook.result.current.handlePublishItem());
-    expect(api.publishItem).toHaveBeenCalledWith(expect.objectContaining({ quantity: 5 }));
+    expect(api.publishItem, '发布请求未发出；当前提示：' + JSON.stringify(alertMock.mock.calls)).toHaveBeenCalledWith(expect.objectContaining({ quantity: 5 }));
     expect(alertMock).toHaveBeenLastCalledWith('商品发布成功');
     expect(harnessState.onConfigureDelivery).not.toHaveBeenCalled();
     act(/* 当前回调再次写入合法表单。 */ () => hook.result.current.setPublishForm(validForm()));
