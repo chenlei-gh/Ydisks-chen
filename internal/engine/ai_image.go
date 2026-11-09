@@ -23,6 +23,7 @@ const (
 	buyerImageTimeout         = 8 * time.Second
 )
 
+// newBuyerImageHTTPClient 创建只允许访问公网地址的买家图片客户端。
 var newBuyerImageHTTPClient = func() *http.Client {
 	return netguard.PublicHTTPClient(buyerImageTimeout)
 }
