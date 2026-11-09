@@ -1,3 +1,5 @@
+import type { PublishBatchDetailRow } from './types';
+
 // PublishBatchSummary 是选择最近批量任务时所需的最小状态模型。
 export interface PublishBatchSummary {
   // id 是批量任务标识。
@@ -78,4 +80,38 @@ export const batchStatusClass = (status?: string): string => {
     default:
       return 'bg-amber-50 text-amber-700 border-amber-100';
   }
+};
+
+
+// csvCell 转义 CSV 字段并阻止 Excel 将不可信文本识别为公式。
+const csvCell = (value: unknown): string => {
+  // raw 是待导出的原始单元格文本。
+  const raw = String(value ?? '');
+  // safe 在可能触发电子表格公式执行的前缀前添加文本标记。
+  const safe = /^[\t\r\n ]*[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
+};
+
+// buildBatchResultsCSV 将当前批次逐行结果序列化为可供表格软件打开的 UTF-8 CSV。
+export const buildBatchResultsCSV = (rows: PublishBatchDetailRow[]): string => {
+  // headers 保存导出文件的稳定列顺序。
+  const headers = ['原始行号', '账号 ID', '标题', '价格', '库存', '状态', '类目', '商品 ID', '商品链接', '失败类型', '错误原因'];
+  // records 保存标题行和当前服务端返回的逐行结果。
+  const records = [
+    headers,
+    ...rows.map(row => [
+      row.row_no,
+      row.cookie_id,
+      row.title,
+      row.price,
+      row.quantity,
+      batchStatusText(row.status),
+      row.category?.cat_name || '',
+      row.item_id,
+      row.item_url,
+      row.failure_kind,
+      row.error_message,
+    ]),
+  ];
+  return `\uFEFF${records.map(record => record.map(csvCell).join(',')).join('\r\n')}`;
 };
