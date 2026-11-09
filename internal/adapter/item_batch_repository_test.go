@@ -173,7 +173,6 @@ func TestBatchRowApplicationModelPreservesSensitiveFreeBusinessFields(t *testing
 	}
 }
 
-
 // TestItemBatchRepositoryPreservesUploadPathWhenRemovalFails 验证文件删除失败时保留数据库路径以便后续重试。
 func TestItemBatchRepositoryPreservesUploadPathWhenRemovalFails(t *testing.T) {
 	// store、cleanup 保存当前测试使用的 SQLite 存储及清理函数。
