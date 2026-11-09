@@ -3,6 +3,8 @@
 export interface SystemSettings {
   /** 默认 AI 模型名称。 */
   ai_model?: string;
+  /** 可选的买家图片理解视觉模型；留空时不下载或识别图片。 */
+  ai_vision_model?: string;
   /** 全局 AI API 密钥。 */
   ai_api_key?: string;
   /** 全局 AI API 密钥是否已在服务端配置。 */
