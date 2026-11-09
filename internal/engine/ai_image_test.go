@@ -165,10 +165,10 @@ func TestDownloadBuyerImageDataURLRejectsCrossHostRedirect(t *testing.T) {
 	// data 是有效图片字节；若重定向策略失效，目标服务器会成功接收请求。
 	data := buyerPNGForTest(t, 1, 1)
 	// target 记录跨主机跳转是否真正到达目标服务器。
-	targetReached := false
+	targetReached := make(chan struct{}, 1)
 	// target 是重定向不应访问的第二个主机。
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		targetReached = true
+		targetReached <- struct{}{}
 		_, _ = w.Write(data)
 	}))
 	defer target.Close()
@@ -183,7 +183,9 @@ func TestDownloadBuyerImageDataURLRejectsCrossHostRedirect(t *testing.T) {
 	if _, err := downloadBuyerImageDataURL(context.Background(), redirector.URL); err == nil {
 		t.Fatal("买家图片下载必须拒绝跨主机重定向")
 	}
-	if targetReached {
+	select {
+	case <-targetReached:
 		t.Fatal("跨主机重定向目标不应收到请求")
+	default:
 	}
 }
