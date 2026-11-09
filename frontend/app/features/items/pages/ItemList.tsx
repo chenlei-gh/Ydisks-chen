@@ -1,4 +1,4 @@
-import { ArrowRight,Bot,Box,CheckCircle2,CircleDashed,Download,Edit,Filter,Link2,LocateFixed,PackagePlus,Plus,RefreshCw,Save,Search,ShoppingBag,Trash2,UploadCloud,User,X } from 'lucide-react';
+import { ArrowRight,Bot,Box,CheckCircle2,CircleDashed,Edit,Filter,Link2,LocateFixed,PackagePlus,Plus,RefreshCw,Save,Search,ShoppingBag,Trash2,UploadCloud,User,X } from 'lucide-react';
 import React,{ Suspense,useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AccountDetail,Item,ItemAIOverride,ItemAISettings,PublishLocation,ShippingRule } from '../api';
@@ -8,7 +8,7 @@ getItemPublishBatches,
 getItems,
 getShippingRules,
 } from '../api';
-import { batchStatusClass,batchStatusText,buildBatchResultsCSV } from '../batchState';
+import { batchStatusClass,batchStatusText } from '../batchState';
 import { BatchPhaseIndicator } from '../components/BatchPhaseIndicator';
 import ItemTable from '../components/ItemTable';
 import { ManualLocationPicker } from '../components/ManualLocationPicker';
@@ -136,28 +136,6 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
     closeBatchModal,
     handleRetryBatchFailed,
   } = batchState;
-
-  // handleExportBatchResults 将当前批次逐行结果下载为 CSV，供离线筛选和复核。
-  const handleExportBatchResults = useCallback(/* 导出动作只读取当前服务端批次快照。 */ () => {
-    // rows 保存当前批次可导出的逐行结果。
-    const rows = batchDetail?.rows || [];
-    if (!batchDetail || rows.length === 0) return;
-    // blob 保存带 UTF-8 BOM 的 CSV 文件内容。
-    const blob = new Blob([buildBatchResultsCSV(rows)], { type: 'text/csv;charset=utf-8' });
-    // url 是浏览器为当前 CSV 文件创建的临时下载地址。
-    const url = window.URL.createObjectURL(blob);
-    // link 是触发浏览器下载的临时锚点。
-    const link = document.createElement('a');
-    // safeBatchID 将批次标识限制为安全的文件名字符。
-    const safeBatchID = batchDetail.id.replace(/[^a-zA-Z0-9_-]/g, '_');
-    link.href = url;
-    link.download = `ydisks-batch-${safeBatchID}-results.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    // 延后释放地址，避免浏览器尚未开始读取文件时撤销下载地址。
-    window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
-  }, [batchDetail]);
 
   // itemActions 商品 feature 提供普通商品操作、发布表单和定位动作。
   const itemActions = useItemActions({
@@ -1005,12 +983,6 @@ const ItemList: React.FC<ItemListProps> = ({ onConfigureDelivery, publishImagesE
 
               {(batchPhase === 'running' || batchPhase === 'done') && batchDetail && (
                 <div className="space-y-4">
-                  <div className="flex justify-end">
-                    <button type="button" disabled={batchDetail.rows.length === 0} onClick={handleExportBatchResults} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                      <Download className="h-4 w-4" />
-                      导出当前结果 CSV
-                    </button>
-                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className={`rounded-2xl p-4 border ${batchStatusClass(batchDetail.status)}`}>
                       <div className="text-xs font-bold opacity-70">任务状态</div>
