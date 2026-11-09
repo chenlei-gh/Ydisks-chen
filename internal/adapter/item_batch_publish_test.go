@@ -288,7 +288,9 @@ func TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure(t *testing.T
 			}}
 			// port 通过受控图片回调抵达最终远端发布边界。
 			port := NewItemBatchPublishPort(store, func() mtop.Client { return client }, nil, nil, nil,
-				func(_ string, ref string) ([]byte, string, string, error) { return []byte("image"), "image/png", ref, nil },
+				func(_ string, ref string) ([]byte, string, string, error) {
+					return []byte("image"), "image/png", ref, nil
+				},
 				func(context.Context, string) ([]byte, string, error) { return nil, "", nil })
 			// _, publishErr 保存远端调用或远端检查点写入失败。
 			_, publishErr := port.PublishRemoteRow(ctx, admin.ID, batchRowApplicationModel(storedRows[0]), workerToken, nil)
