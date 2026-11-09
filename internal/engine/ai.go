@@ -168,7 +168,7 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 				currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: m.Text})
 			}
 			currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{
-				Type: openai.ChatMessagePartTypeImageURL,
+				Type:     openai.ChatMessagePartTypeImageURL,
 				ImageURL: &openai.ChatMessageImageURL{URL: imageDataURL, Detail: openai.ImageURLDetailLow},
 			})
 			messages[0].Content += buyerImageTrustRule
