@@ -144,6 +144,9 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 		}
 		messages = append(messages, openai.ChatCompletionMessage{Role: role, Content: truncateAIContent(message.Content)})
 	}
+	// aiCtx、cancel 为图片下载和模型请求共享同一个总超时边界。
+	aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	// currentMessage 保存本轮买家输入；图片只作为当前请求的多模态内容，不写入历史记录。
 	currentMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: m.Text}
 	// requestModel 默认沿用文本模型，只有图片成功读取时才切换到可选视觉模型。
@@ -154,7 +157,7 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 			currentMessage.Content = buyerImageFallbackText(m.Text, "尚未配置视觉模型")
 		} else if imageURL == "" {
 			currentMessage.Content = buyerImageFallbackText(m.Text, "图片地址无法提取")
-		} else if imageDataURL, imageErr := downloadBuyerImageDataURL(ctx, imageURL); imageErr != nil {
+		} else if imageDataURL, imageErr := downloadBuyerImageDataURL(aiCtx, imageURL); imageErr != nil {
 			a.logger.Warn("买家图片无法读取，回退文本模型", "err", imageErr)
 			currentMessage.Content = buyerImageFallbackText(m.Text, "图片读取失败")
 		} else {
@@ -173,9 +176,6 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 	}
 	messages = append(messages, currentMessage)
 
-	// aiCtx、cancel 用于本次流程后续判断的人工智能Ctx、cancel
-	aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
 	// resp、err 用于本次流程后续判断的resp、err
 	resp, err := client.CreateChatCompletion(aiCtx, openai.ChatCompletionRequest{
 		Model:       requestModel,
