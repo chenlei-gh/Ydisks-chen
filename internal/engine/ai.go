@@ -152,16 +152,23 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 	// requestModel 默认沿用文本模型，只有图片成功读取时才切换到可选视觉模型。
 	requestModel := aiCfg.Model
 	if isBuyerImageMessage(m) {
+		// imageURL 保存平台消息中的第一张买家图片地址。
 		imageURL := extractBuyerImageURL(m)
+		// imageDataURL 保存验证通过后供视觉模型读取的图片数据地址。
+		var imageDataURL string
+		// imageErr 保存下载或图片格式验证失败的原因。
+		var imageErr error
 		if aiCfg.VisionModel == "" {
 			currentMessage.Content = buyerImageFallbackText(m.Text, "尚未配置视觉模型")
 		} else if imageURL == "" {
 			currentMessage.Content = buyerImageFallbackText(m.Text, "图片地址无法提取")
-		} else if imageDataURL, imageErr := downloadBuyerImageDataURL(aiCtx, imageURL); imageErr != nil {
-			a.logger.Warn("买家图片无法读取，回退文本模型", "err", imageErr)
-			currentMessage.Content = buyerImageFallbackText(m.Text, "图片读取失败")
 		} else {
-			requestModel = aiCfg.VisionModel
+			imageDataURL, imageErr = downloadBuyerImageDataURL(aiCtx, imageURL)
+			if imageErr != nil {
+				a.logger.Warn("买家图片无法读取，回退文本模型", "err", imageErr)
+				currentMessage.Content = buyerImageFallbackText(m.Text, "图片读取失败")
+			} else {
+				requestModel = aiCfg.VisionModel
 			currentMessage.Content = ""
 			currentMessage.MultiContent = make([]openai.ChatMessagePart, 0, 2)
 			if strings.TrimSpace(m.Text) != "" {
@@ -171,7 +178,8 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 				Type:     openai.ChatMessagePartTypeImageURL,
 				ImageURL: &openai.ChatMessageImageURL{URL: imageDataURL, Detail: openai.ImageURLDetailLow},
 			})
-			messages[0].Content += buyerImageTrustRule
+				messages[0].Content += buyerImageTrustRule
+			}
 		}
 	}
 	messages = append(messages, currentMessage)
