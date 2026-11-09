@@ -114,12 +114,19 @@ jobs:
       - name: 运行前端测试
         run: npm test --prefix frontend
 
-      - name: 构建并校验嵌入式前端产物
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          npm run build --prefix frontend
-          git diff --exit-code -- internal/webui/static
+      - name: 构建嵌入式前端产物
+        run: npm run build --prefix frontend
+
+      - name: 暂存构建产物用于一致性修复
+        uses: actions/upload-artifact@v6
+        with:
+          name: embedded-webui-static
+          path: internal/webui/static/
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: 校验嵌入式前端产物已提交
+        run: git diff --exit-code -- internal/webui/static
 
   multidb:
     name: MySQL/PostgreSQL 多数据库回归
