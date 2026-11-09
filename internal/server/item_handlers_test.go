@@ -104,6 +104,12 @@ func TestRecommendItemPublishCategory(t *testing.T) {
 
 // PublishItem 封装发布商品业务协调。
 func (s *stubPublishMTop) PublishItem(ctx context.Context, cookies string, req mtop.PublishItemRequest) (*mtop.PublishItemResult, error) {
+	if req.BeforePublish != nil {
+		// gateErr 保存最终商品创建请求前的持久化闸门结果。
+		if gateErr := req.BeforePublish(ctx); gateErr != nil {
+			return nil, gateErr
+		}
+	}
 	return s.publish(ctx, cookies, req)
 }
 
