@@ -82,6 +82,14 @@ func (s *Server) getSinglePublishOperation(w http.ResponseWriter, r *http.Reques
 func (s *Server) writeSinglePublishCallError(w http.ResponseWriter, cookieID string, callErr error) {
 	// publishErr 保存可映射为专用 HTTP 状态码的应用层发布错误。
 	var publishErr *items.PublishError
+	if errors.Is(callErr, items.ErrPublishResultMissingItemID) {
+		writeErrCode(w, http.StatusBadGateway, "publish_result_missing_item_id", callErr.Error(), "")
+		return
+	}
+	if errors.Is(callErr, items.ErrPublishOperationUncertain) {
+		writeErrCode(w, http.StatusBadGateway, "publish_result_uncertain", callErr.Error(), "")
+		return
+	}
 	if errors.As(callErr, &publishErr) {
 		// status 保存专用发布错误对应的 HTTP 状态码。
 		status := http.StatusBadGateway
