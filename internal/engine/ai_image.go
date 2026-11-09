@@ -102,7 +102,6 @@ func downloadBuyerImageDataURL(ctx context.Context, rawURL string) (string, erro
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }
 
-
 // buyerImageTrustRule 将图片内容限定为不可信参考数据，避免图片指令覆盖店铺规则。
 const buyerImageTrustRule = `
 
