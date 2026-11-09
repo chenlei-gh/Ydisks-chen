@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       go: ${{ steps.filter.outputs.go }}
+      go_selector: ${{ steps.filter.outputs.go_selector }}
       frontend: ${{ steps.filter.outputs.frontend }}
       smoke: ${{ steps.filter.outputs.smoke }}
       multidb: ${{ steps.filter.outputs.multidb }}
@@ -112,6 +113,11 @@ jobs:
               - 'icon/**'
               - '.gitignore'
               - '.github/workflows/**'
+            go_selector:
+              - 'scripts/ci/**'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/ci.yml'
 
   go:
     name: Go 检查
@@ -165,6 +171,7 @@ jobs:
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
 
       - name: 用历史 Go-only PR 验证真实包选择路径
+        if: needs.changes.outputs.go_selector == 'true'
         shell: bash
         env:
           PR9_BASE_SHA: 0e5b71edd99b110e04e38731c1635a68c4e85346
