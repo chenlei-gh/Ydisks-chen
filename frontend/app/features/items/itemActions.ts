@@ -149,36 +149,6 @@ export interface ItemActionsState {
 
 
 // getOrCreateSinglePublishOperationID 在会话存储中按账号和完整表单内容复用发布操作 ID。
-// readPublishFileBytes 读取浏览器 File 内容，兼容缺少 Blob.arrayBuffer 的测试与旧浏览器环境。
-const readPublishFileBytes = async (file: File): Promise<Uint8Array> => {
-  if (typeof file.arrayBuffer === 'function') {
-    return new Uint8Array(await file.arrayBuffer());
-  }
-  return new Promise(/* readResult、readError 接收 FileReader 的读取结果或错误。 */ (readResult, readError) => {
-    // reader 是当前图片的兼容读取器。
-    const reader = new FileReader();
-    reader.onload = /* onLoad 处理图片读取完成事件。 */ () => {
-      if (reader.result instanceof ArrayBuffer) readResult(new Uint8Array(reader.result));
-      else readError(new Error('无法读取商品图片内容'));
-    };
-    reader.onerror = /* onError 处理图片读取失败事件。 */ () => readError(reader.error ?? new Error('读取商品图片失败'));
-    reader.readAsArrayBuffer(file);
-  });
-};
-
-// stablePublishHash 生成仅用于浏览器会话键的稳定短指纹；服务端仍以 SHA-256 重新校验真实请求。
-const stablePublishHash = (bytes: Uint8Array): string => {
-  // hashA、hashB 是两组独立的 32 位非密码学哈希状态。
-  let hashA = 2166136261;
-  // hashB 是第二组独立的 32 位非密码学哈希状态。
-  let hashB = 5381;
-  for (const /* byte 是当前输入中的单个字节。 */ byte of bytes) {
-    hashA = Math.imul(hashA ^ byte, 16777619);
-    hashB = Math.imul(hashB, 33) ^ byte;
-  }
-  return (hashA >>> 0).toString(16).padStart(8, '0') + (hashB >>> 0).toString(16).padStart(8, '0');
-};
-
 const getOrCreateSinglePublishOperationID = async (
   form: PublishItemForm,
   location: PublishLocation | null,
@@ -189,15 +159,10 @@ const getOrCreateSinglePublishOperationID = async (
     ...form.images.map(/* imageFile 表示当前商品主图文件。 */ imageFile => ({ role: 'item', file: imageFile })),
     ...form.specs.flatMap(/* spec 表示当前商品规格维度。 */ spec => spec.values.flatMap(/* value 表示当前规格维度的规格值。 */ value => value.image ? [{ role: spec.specId + ':' + value.valueId, file: value.image }] : [])),
   ];
-  // imageDigests 保存图片字节摘要，避免仅按文件名复用操作 ID。
-  const imageDigests: string[] = [];
-  for (const /* entry 表示当前参与指纹计算的图片及其用途。 */ entry of imageEntries) {
-    // imageBytes 保存当前图片的字节内容。
-    const imageBytes = await readPublishFileBytes(entry.file);
-    // digestHex 保存浏览器会话键使用的稳定图片摘要。
-    const digestHex = stablePublishHash(imageBytes);
-    imageDigests.push(entry.role + '|' + entry.file.name + '|' + entry.file.type + '|' + digestHex);
-  }
+  // imageDigests 保存图片用途和浏览器可见元数据；服务端会独立计算图片内容 SHA-256。
+  const imageDigests = imageEntries.map(/* entry 表示当前商品图片或规格图片。 */ entry =>
+    entry.role + '|' + entry.file.name + '|' + entry.file.type + '|' + entry.file.size + '|' + entry.file.lastModified,
+  );
   // canonical 保存不包含图片二进制的规范化表单字段和图片摘要。
   const canonical = JSON.stringify({
     cookie_id: form.cookie_id, title: form.title, description: form.description,
