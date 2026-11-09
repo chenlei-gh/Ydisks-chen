@@ -19,7 +19,7 @@ const stablePublishHash = (bytes: Uint8Array): string => {
   return (hashA >>> 0).toString(16).padStart(8, '0') + (hashB >>> 0).toString(16).padStart(8, '0');
 };
 
-const getOrCreateSinglePublishOperationID = async (
+export const getOrCreateSinglePublishOperationID = async (
   form: PublishItemForm,
   location: PublishLocation | null,
   category: PublishCategory | null,
@@ -83,7 +83,7 @@ const getOrCreateSinglePublishOperationID = async (
 };
 
 // clearSinglePublishOperationID 仅在当前操作成功收口后清理会话存储中的活动操作标识。
-const clearSinglePublishOperationID = (cookieID: string, operationID: string): void => {
+export const clearSinglePublishOperationID = (cookieID: string, operationID: string): void => {
   // storageKey 是当前账号的活动操作记录键。
   const storageKey = 'ydisks.single-publish.active.' + encodeURIComponent(cookieID);
   try {
