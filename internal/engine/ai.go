@@ -169,15 +169,15 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 				currentMessage.Content = buyerImageFallbackText(m.Text, "图片读取失败")
 			} else {
 				requestModel = aiCfg.VisionModel
-			currentMessage.Content = ""
-			currentMessage.MultiContent = make([]openai.ChatMessagePart, 0, 2)
-			if strings.TrimSpace(m.Text) != "" {
-				currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: m.Text})
-			}
-			currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{
-				Type:     openai.ChatMessagePartTypeImageURL,
-				ImageURL: &openai.ChatMessageImageURL{URL: imageDataURL, Detail: openai.ImageURLDetailLow},
-			})
+				currentMessage.Content = ""
+				currentMessage.MultiContent = make([]openai.ChatMessagePart, 0, 2)
+				if strings.TrimSpace(m.Text) != "" {
+					currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: m.Text})
+				}
+				currentMessage.MultiContent = append(currentMessage.MultiContent, openai.ChatMessagePart{
+					Type:     openai.ChatMessagePartTypeImageURL,
+					ImageURL: &openai.ChatMessageImageURL{URL: imageDataURL, Detail: openai.ImageURLDetailLow},
+				})
 				messages[0].Content += buyerImageTrustRule
 			}
 		}
