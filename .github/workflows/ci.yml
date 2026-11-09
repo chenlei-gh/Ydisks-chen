@@ -9,14 +9,76 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: 判断改动范围
+    runs-on: ubuntu-24.04
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      smoke: ${{ steps.filter.outputs.smoke }}
+      multidb: ${{ steps.filter.outputs.multidb }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: 识别受影响的验证层
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            go:
+              - '**/*.go'
+              - '**/testdata/**'
+              - 'go.mod'
+              - 'go.sum'
+              - '.golangci.yml'
+              - 'tools/**'
+              - 'api/**'
+              - 'docs/**'
+              - 'wiki/**'
+              - 'Makefile'
+              - 'AGENTS.md'
+              - 'README*'
+              - 'CONTRIBUTING.md'
+              - 'P0_AUDIT.md'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - 'api/openapi.yaml'
+              - 'internal/webui/static/**'
+              - '.github/workflows/ci.yml'
+            smoke:
+              - 'cmd/server/**'
+              - 'cmd/browser-install/**'
+              - 'internal/server/**'
+              - 'internal/config/**'
+              - 'internal/browser/**'
+              - 'internal/db/**'
+              - 'internal/webui/**'
+              - 'tools/smoke/**'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/ci.yml'
+            multidb:
+              - 'internal/db/**'
+              - 'migrations/**'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/ci.yml'
+
   go:
     name: Go 检查
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: 检出代码
@@ -67,6 +129,8 @@ jobs:
 
   smoke:
     name: 冒烟测试
+    needs: changes
+    if: needs.changes.outputs.smoke == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: 检出代码
@@ -86,6 +150,8 @@ jobs:
 
   frontend:
     name: React 前端检查
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: 检出代码
@@ -122,6 +188,8 @@ jobs:
 
   multidb:
     name: MySQL/PostgreSQL 多数据库回归
+    needs: changes
+    if: needs.changes.outputs.multidb == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
