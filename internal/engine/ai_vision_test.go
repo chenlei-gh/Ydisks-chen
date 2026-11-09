@@ -80,7 +80,7 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 			// message 是携带买家图片的真实引擎消息模型；图片 URL 只存在于当前 Raw 消息中。
 			message := chatMsg("能便宜点吗", "item-vision", "chat-vision")
 			message.Raw = map[string]any{
-				"1": map[string]any{"10": map[string]any{"extJson": `{"contentType":"2"}`}},
+				"1":     map[string]any{"10": map[string]any{"extJson": `{"contentType":"2"}`}},
 				"image": map[string]any{"pics": []any{map[string]any{"url": imageServer.URL + "/buyer.png"}}},
 			}
 			replier := NewAIReplier("cid", store, nil)
