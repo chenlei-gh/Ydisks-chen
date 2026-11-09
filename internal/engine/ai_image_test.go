@@ -40,7 +40,7 @@ func withBuyerImageHTTPClient(t *testing.T, client *http.Client) {
 func TestExtractBuyerImageURLOnlyAcceptsImageMessages(t *testing.T) {
 	// message 是带图片正文的买家入站消息。
 	message := ChatMessage{Raw: map[string]any{
-		"1": map[string]any{"10": map[string]any{"extJson": `{"contentType":"2"}`}},
+		"1":     map[string]any{"10": map[string]any{"extJson": `{"contentType":"2"}`}},
 		"image": map[string]any{"pics": []any{map[string]any{"url": "https://images.example/buyer.png"}}},
 	}}
 	if got := extractBuyerImageURL(message); got != "https://images.example/buyer.png" {
@@ -60,9 +60,9 @@ func TestExtractChatMessageRetainsImageOnlyBuyerMessage(t *testing.T) {
 		"1": map[string]any{
 			"2": "chat-image-only@goofish",
 			"10": map[string]any{
-				"extJson": `{"contentType":"2"}`,
+				"extJson":      `{"contentType":"2"}`,
 				"senderUserId": "buyer-1",
-				"reminderUrl": "https://www.goofish.com/item?id=item-1",
+				"reminderUrl":  "https://www.goofish.com/item?id=item-1",
 			},
 		},
 		"image": map[string]any{"pics": []any{map[string]any{"url": "https://images.example/buyer.png"}}},
