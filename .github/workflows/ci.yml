@@ -159,8 +159,14 @@ jobs:
           version: v2.12.2
           args: ./...
 
-      - name: 运行 Go 测试
-        run: go test ./...
+      - name: 检查 Go 测试选择器
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+
+      - name: 运行 Go 测试（PR 按反向依赖闭包选择）
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/ci/select_go_tests.py
 
       - name: 运行 server 并发 smoke race
         run: make test-server-race
