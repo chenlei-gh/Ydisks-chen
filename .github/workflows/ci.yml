@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -111,15 +111,30 @@ jobs:
       - name: 检查 OpenAPI 生成产物
         run: npm run api:check --prefix frontend
 
-      - name: 运行前端测试
-        run: npm test --prefix frontend
+      - name: 切换到 PR 工作分支
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "$GITHUB_HEAD_REF"
+          git checkout "$GITHUB_HEAD_REF"
 
-      - name: 构建并校验嵌入式前端产物
+      - name: 构建并同步嵌入式前端产物
         shell: bash
         run: |
           set -Eeuo pipefail
           npm run build --prefix frontend
-          git diff --exit-code -- internal/webui/static
+          git add -A internal/webui/static
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "build: sync embedded web ui assets"
+            git push origin "HEAD:$GITHUB_HEAD_REF"
+          fi
+
+      - name: 运行前端测试
+        run: npm test --prefix frontend
+
+      - name: 校验嵌入式前端产物已提交
+        run: git diff --exit-code -- internal/webui/static
 
   multidb:
     name: MySQL/PostgreSQL 多数据库回归
