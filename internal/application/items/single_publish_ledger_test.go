@@ -273,7 +273,7 @@ func TestSinglePublishLedgerPreservesCookieWarning(t *testing.T) {
 	// second 保存重复请求读取的持久化结果。
 	// second、err 保存重复提交后的持久化结果及应用服务错误。
 	second, err := service.PublishSingle(context.Background(), input)
-	if err != nil || second.Result == nil || !errors.Is(second.ResponseCookieErr, cookieWarning) {
+	if err != nil || second.Result == nil || second.ResponseCookieErr == nil || second.ResponseCookieErr.Error() != cookieWarning.Error() {
 		t.Fatalf("second outcome=%+v err=%v", second, err)
 	}
 	if publisher.calls != 1 {
