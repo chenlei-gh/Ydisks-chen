@@ -36,7 +36,7 @@ func isBuyerImageMessage(message ChatMessage) bool {
 	if message.Raw == nil {
 		return false
 	}
-	// messageBody 保存平台消息主体；ok 表示主体字段是否存在。
+	// messageBody 保存平台消息主体。
 	messageBody, _ := message.Raw["1"].(map[string]any)
 	// messageExtra 保存平台消息扩展字段。
 	messageExtra, _ := messageBody["10"].(map[string]any)
