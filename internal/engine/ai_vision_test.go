@@ -24,20 +24,27 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 		{name: "configured vision model", visionModel: "vision-model", wantModel: "vision-model", wantMultiPart: true},
 		{name: "no vision model", visionModel: "", wantModel: "text-model", wantMultiPart: false},
 	}
+	// testCase 是当前视觉模型配置场景。
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
+			// store 和 cleanup 保存隔离测试数据库及其清理函数。
 			store, cleanup := newAIStore(t)
 			defer cleanup()
+			// ctx 是当前测试使用的请求上下文。
 			ctx := context.Background()
+			// err 表示初始化账号 AI 回复设置的数据库错误。
 			if _, err := store.DB.ExecContext(ctx, `INSERT INTO ai_reply_settings (cookie_id, ai_enabled, custom_prompts) VALUES ('cid', 1, '')`); err != nil {
 				t.Fatal(err)
 			}
+			// err 表示保存测试 API Key 的错误。
 			if err := store.Settings.Set(ctx, "ai_api_key", "sk-test"); err != nil {
 				t.Fatal(err)
 			}
+			// err 表示保存文本模型名称的错误。
 			if err := store.Settings.Set(ctx, "ai_model", "text-model"); err != nil {
 				t.Fatal(err)
 			}
+			// err 表示保存可选视觉模型名称的错误。
 			if err := store.Settings.Set(ctx, "ai_vision_model", testCase.visionModel); err != nil {
 				t.Fatal(err)
 			}
@@ -47,6 +54,7 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 			if err := png.Encode(&pngBuffer, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
 				t.Fatal(err)
 			}
+			// imageServer 模拟提供买家图片的 CDN。
 			imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write(pngBuffer.Bytes())
 			}))
@@ -54,6 +62,7 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 
 			// imageDownloadCount 用于确认未配置视觉模型时不会下载买家图片。
 			imageDownloadCount := 0
+			// originalImageClient 保存生产图片客户端工厂，供测试结束后恢复。
 			originalImageClient := newBuyerImageHTTPClient
 			newBuyerImageHTTPClient = func() *http.Client {
 				imageDownloadCount++
@@ -63,7 +72,9 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 
 			// captured 保存 AI 请求体，供断言实际模型和消息内容。
 			var captured map[string]any
+			// aiServer 模拟 OpenAI 兼容接口并捕获实际请求。
 			aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// err 表示解析视觉模型请求体失败的原因。
 				if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
 					t.Errorf("解析 AI 请求: %v", err)
 					http.Error(w, "invalid request", http.StatusBadRequest)
@@ -73,6 +84,7 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 				_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"可以，咱们再沟通。"}}]}`))
 			}))
 			defer aiServer.Close()
+			// err 表示保存本地 AI 测试端点的错误。
 			if err := store.Settings.Set(ctx, "ai_api_url", aiServer.URL); err != nil {
 				t.Fatal(err)
 			}
@@ -83,7 +95,9 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 				"1":     map[string]any{"10": map[string]any{"extJson": `{"contentType":"2"}`}},
 				"image": map[string]any{"pics": []any{map[string]any{"url": imageServer.URL + "/buyer.png"}}},
 			}
+			// replier 是绑定测试数据库的 AI 回复服务。
 			replier := NewAIReplier("cid", store, nil)
+			// err 表示本轮 AI 回复处理失败的原因。
 			if _, err := replier.Reply(ctx, message); err != nil {
 				t.Fatalf("AI Reply: %v", err)
 			}
@@ -106,7 +120,9 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 				if !ok || len(parts) != 2 {
 					t.Fatalf("视觉请求必须包含文本和图片两部分: %#v", current["content"])
 				}
+				// imagePart 保存模型请求中的图片内容片段。
 				imagePart, _ := parts[1].(map[string]any)
+				// imageURL 保存多模态图片地址对象。
 				imageURL, _ := imagePart["image_url"].(map[string]any)
 				if imagePart["type"] != "image_url" || !strings.HasPrefix(toString(imageURL["url"]), "data:image/png;base64,") {
 					t.Fatalf("视觉请求未包含已验证的 PNG data URL: %#v", parts[1])
