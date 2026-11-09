@@ -172,3 +172,71 @@ func TestBatchRowApplicationModelPreservesSensitiveFreeBusinessFields(t *testing
 		t.Fatalf("明细字段未完整转换：source=%+v converted=%+v", source, converted)
 	}
 }
+
+// TestItemBatchRepositoryPreservesUploadPathWhenRemovalFails 验证文件删除失败时保留数据库路径以便后续重试。
+func TestItemBatchRepositoryPreservesUploadPathWhenRemovalFails(t *testing.T) {
+	// store、cleanup 保存当前测试使用的 SQLite 存储及清理函数。
+	store, cleanup := newAdapterTestStore(t)
+	defer cleanup()
+	// ctx 是本测试使用的非取消上下文。
+	ctx := context.Background()
+	// admin、adminErr 保存测试用户及读取错误。
+	admin, adminErr := store.Users.GetByUsername(ctx, "admin")
+	if adminErr != nil {
+		t.Fatalf("读取测试用户失败: %v", adminErr)
+	}
+	// uploadDir 是故意包含非法路径字节的目录路径，确保操作系统拒绝删除且不会触及真实文件。
+	uploadDir := filepath.Join(t.TempDir(), "invalid\x00upload")
+	// batch 保存待清理的非运行批次。
+	batch := &db.ItemPublishBatch{ID: "batch-upload-remove-failure", UserID: admin.ID, DefaultCookieID: "cid", Filename: "items.csv", UploadDir: uploadDir, Status: "completed"}
+	// err 保存创建测试批次的错误。
+	if err := store.PublishBatches.Create(ctx, batch, nil); err != nil {
+		t.Fatalf("创建测试批次失败: %v", err)
+	}
+	// repository 是绑定测试数据库的上传目录清理适配器。
+	repository := NewItemBatchRepository(store)
+	// removeErr 保存非法路径触发的文件系统删除错误。
+	removeErr := repository.DeleteUpload(ctx, batch.ID, uploadDir)
+	if removeErr == nil {
+		t.Fatal("非法上传路径应导致删除失败")
+	}
+	// stored、readErr 保存删除失败后仍应保留的数据库批次快照。
+	stored, readErr := store.PublishBatches.Get(ctx, admin.ID, batch.ID)
+	if readErr != nil || stored.UploadDir != uploadDir {
+		t.Fatalf("删除失败后必须保留上传路径以便重试: batch=%+v err=%v", stored, readErr)
+	}
+}
+
+// TestItemBatchRepositoryPreservesBatchWhenUploadRemovalFails 验证删除上传目录失败时批次记录仍保留以供重试。
+func TestItemBatchRepositoryPreservesBatchWhenUploadRemovalFails(t *testing.T) {
+	// store、cleanup 保存当前测试使用的 SQLite 存储及清理函数。
+	store, cleanup := newAdapterTestStore(t)
+	defer cleanup()
+	// ctx 是本测试使用的非取消上下文。
+	ctx := context.Background()
+	// admin、adminErr 保存测试用户及读取错误。
+	admin, adminErr := store.Users.GetByUsername(ctx, "admin")
+	if adminErr != nil {
+		t.Fatalf("读取测试用户失败: %v", adminErr)
+	}
+	// uploadDir 是故意包含非法路径字节的目录路径，确保操作系统拒绝删除且不会触及真实文件。
+	uploadDir := filepath.Join(t.TempDir(), "invalid\x00upload")
+	// batch 保存待删除的非运行批次。
+	batch := &db.ItemPublishBatch{ID: "batch-delete-remove-failure", UserID: admin.ID, DefaultCookieID: "cid", Filename: "items.csv", UploadDir: uploadDir, Status: "completed"}
+	// err 保存创建测试批次的错误。
+	if err := store.PublishBatches.Create(ctx, batch, nil); err != nil {
+		t.Fatalf("创建测试批次失败: %v", err)
+	}
+	// repository 是绑定测试数据库的上传目录清理适配器。
+	repository := NewItemBatchRepository(store)
+	// removeErr 保存非法路径触发的文件系统删除错误。
+	removeErr := repository.DeleteBatch(ctx, admin.ID, batch.ID)
+	if removeErr == nil {
+		t.Fatal("非法上传路径应导致批次删除失败")
+	}
+	// stored、readErr 保存删除失败后仍应保留的数据库批次快照。
+	stored, readErr := store.PublishBatches.Get(ctx, admin.ID, batch.ID)
+	if readErr != nil || stored.UploadDir != uploadDir {
+		t.Fatalf("删除失败后必须保留批次及上传路径: batch=%+v err=%v", stored, readErr)
+	}
+}
