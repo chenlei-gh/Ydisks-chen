@@ -42,6 +42,7 @@ jobs:
               - '**/testdata/**'
               - 'go.mod'
               - 'go.sum'
+              - 'internal/db/**'
               - 'Makefile'
               - '.env.example'
               - '.golangci.yml'
