@@ -218,7 +218,6 @@ func TestBatchPublishLocationSupportsV102JSON(t *testing.T) {
 	}
 }
 
-
 // TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure 验证远端超时及远端成功后检查点写入失败都不会被普通重试重放。
 func TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure(t *testing.T) {
 	// scenarios 覆盖远端请求结果未知和远端已成功但本地检查点写入失败两种边界。
