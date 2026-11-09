@@ -299,7 +299,8 @@ func TestSinglePublishLedgerRemoteCheckpointFailureNeverReplays(t *testing.T) {
 	// checkpointErr 模拟平台成功后远端检查点的数据库提交失败。
 	checkpointErr := errors.New("remote checkpoint commit failed")
 	// ledger 保存拒绝远端成功检查点的测试账本。
-	ledger := &ledgerTestFake{remoteConfirmedErr: checkpointErr}
+	ledger := newLedgerTestFake()
+	ledger.remoteConfirmedErr = checkpointErr
 	// publisher 保存已经返回真实商品结果的平台替身。
 	publisher := &ledgerPublisherFake{result: &PublishResult{ItemID: "item-remote-confirmed"}}
 	// repository 保存本地商品仓储替身。
@@ -334,7 +335,8 @@ func TestSinglePublishLedgerRemoteCheckpointFailureNeverReplays(t *testing.T) {
 // TestSinglePublishLedgerRecoversFinalStateCommitFailure 验证本地商品已保存但最终账本提交失败时只恢复本地收尾。
 func TestSinglePublishLedgerRecoversFinalStateCommitFailure(t *testing.T) {
 	// ledger 保存首次拒绝 local_confirmed、随后允许恢复的测试账本。
-	ledger := &ledgerTestFake{localConfirmedErr: errors.New("final state commit failed")}
+	ledger := newLedgerTestFake()
+	ledger.localConfirmedErr = errors.New("final state commit failed")
 	// publisher 保存固定远端结果的平台替身。
 	publisher := &ledgerPublisherFake{result: &PublishResult{ItemID: "item-final-state"}}
 	// repository 保存本地商品 Upsert 次数。
