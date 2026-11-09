@@ -131,7 +131,7 @@
 - [x] HTTP 接收稳定 operation ID，并提供当前用户隔离的操作状态查询。
 - [x] 前端在 sessionStorage 中按账号和完整表单指纹复用 operation ID；不保存图片或 Cookie。
 - [x] 增加应用层未知结果隔离、远端确认后本地恢复、指纹复用冲突测试。
-- [ ] CI 通过 Go / 前端 / API 契约 / 多数据库回归门禁。
+- [x] CI 通过 Go / 前端 / API 契约 / 多数据库回归门禁（PR #7 head `2cb9352fd3fe7de8ebd6ab35d37ed3908a4e8a99`，run `42542832914`，4/4 jobs success；合并提交 `48d77e9aba1a29da0b7ce64992bfaaa81c3f7831`）。
 - [ ] 真实闲鱼平台行为验证（当前按要求暂停，不作为本 PR 合并前置条件）。
 
 **边界说明**：started / unknown 只表示最终创建请求可能已发出，不等于远端 exactly-once；没有平台幂等键或按客户端 ID 查询能力时，未知结果必须人工核对。图片上传和类目准备发生在最终创建闸门之前，预闸门失败可能留下孤立上传资源。前端刷新恢复需要用户重新选择相同图片并恢复相同表单；sessionStorage 只保存操作 ID，不保存图片字节。
@@ -256,3 +256,13 @@
 - 闸门尚未通过时（例如图片上传或类目准备阶段遇到明确 Session 过期），原有一次凭证恢复重试仍保留；该路径不代表商品创建请求已发出。
 - 新增回归测试模拟闸门通过后 Session 过期，验证平台发布方法仅调用一次。真实 MTOP/闲鱼平台行为未测试。
 - 该回调为下一步接入持久化 `prepared -> started` 检查点预留应用层通道；当前 HTTP 流程尚未提供 operation ID，也尚未写入操作记录，因此不能宣称单商品发布的未知结果已完整闭环。
+
+
+### 2026-11-09 单商品发布持久化账本合并验收
+
+- PR：[#7](https://github.com/chenlei-gh/Ydisks-chen/pull/7)，已合并至 `main`。
+- 合并提交：`48d77e9aba1a29da0b7ce64992bfaaa81c3f7831`；合并后的 `main` HEAD 与该 SHA 一致。
+- PR head CI：run [`42542832914`](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42542832914)，Go 检查、MySQL/PostgreSQL 多数据库回归、React 前端检查、冒烟测试 4/4 全部成功。
+- 合并后主分支附加工作流：Wiki 同步成功；GitHub Pages 部署失败，日志为 Pages deployment API 404，并提示需启用 GitHub Pages。该失败属于文档站点部署配置，不是 PR 核心质量门禁。
+- 验收边界：CI 证明本地代码、数据库迁移和自动化测试通过；没有证明闲鱼真实账号/商品创建行为。真实平台验证仍暂停。
+- 剩余风险：进程在远端商品创建成功后、写入 `remote_confirmed` 前硬中断，仍会留下 `started` 状态，必须人工核对；没有平台端幂等键/按 operation ID 查询能力，不得宣称远端 exactly-once。图片/类目准备在最终创建闸门之前，仍可能留下孤立上传资源。
