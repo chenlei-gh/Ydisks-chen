@@ -220,12 +220,15 @@ func (r *ItemBatchRepository) DeleteBatch(ctx context.Context, userID int64, bat
 	if err != nil {
 		return err
 	}
-	// err 表示数据库批次及其上传目录删除错误。
+	// 如果本地目录删除失败，保留数据库批次记录以便再次定位和重试。
+	if batch != nil && batch.UploadDir != "" {
+		if err := os.RemoveAll(batch.UploadDir); err != nil {
+			return err
+		}
+	}
+	// err 表示本地目录清理成功后删除数据库批次记录的结果。
 	if err := r.store.PublishBatches.Delete(ctx, userID, batchID); err != nil {
 		return err
-	}
-	if batch != nil && batch.UploadDir != "" {
-		return os.RemoveAll(batch.UploadDir)
 	}
 	return nil
 }
