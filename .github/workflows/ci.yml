@@ -121,6 +121,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: 配置 Go
         uses: actions/setup-go@v7
@@ -161,6 +163,21 @@ jobs:
 
       - name: 检查 Go 测试选择器
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+
+      - name: 用历史 Go-only PR 验证真实包选择路径
+        shell: bash
+        env:
+          PR9_BASE_SHA: 0e5b71edd99b110e04e38731c1635a68c4e85346
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags origin '+refs/pull/9/head:refs/remotes/origin/pr-9'
+          git worktree add --detach "$RUNNER_TEMP/ydisks-pr9" refs/remotes/origin/pr-9
+          (
+            cd "$RUNNER_TEMP/ydisks-pr9"
+            GITHUB_EVENT_NAME=pull_request \
+              PR_BASE_SHA="$PR9_BASE_SHA" \
+              python3 "$GITHUB_WORKSPACE/scripts/ci/select_go_tests.py"
+          )
 
       - name: 运行 Go 测试（PR 按反向依赖闭包选择）
         env:
