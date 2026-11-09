@@ -18,11 +18,16 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 	cases := []struct {
 		name          string
 		visionModel   string
+		mode          string
+		messageText   string
 		wantModel     string
 		wantMultiPart bool
+		wantNoReply   bool
 	}{
-		{name: "configured vision model", visionModel: "vision-model", wantModel: "vision-model", wantMultiPart: true},
-		{name: "no vision model", visionModel: "", wantModel: "text-model", wantMultiPart: false},
+		{name: "configured vision model", visionModel: "vision-model", mode: "bargain_only", messageText: "能便宜点吗", wantModel: "vision-model", wantMultiPart: true},
+		{name: "no vision model", visionModel: "", mode: "bargain_only", messageText: "能便宜点吗", wantModel: "text-model", wantMultiPart: false},
+		{name: "image-only full service", visionModel: "vision-model", mode: "full_service", messageText: "", wantModel: "vision-model", wantMultiPart: true},
+		{name: "image-only bargain-only", visionModel: "vision-model", mode: "bargain_only", messageText: "", wantNoReply: true},
 	}
 	// testCase 是当前视觉模型配置场景。
 	for _, testCase := range cases {
@@ -33,7 +38,7 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 			// ctx 是当前测试使用的请求上下文。
 			ctx := context.Background()
 			// err 表示初始化账号 AI 回复设置的数据库错误。
-			if _, err := store.DB.ExecContext(ctx, `INSERT INTO ai_reply_settings (cookie_id, ai_enabled, custom_prompts) VALUES ('cid', 1, '')`); err != nil {
+			if _, err := store.DB.ExecContext(ctx, `INSERT INTO ai_reply_settings (cookie_id, ai_enabled, custom_prompts, ai_mode) VALUES ('cid', 1, '', ?)`, testCase.mode); err != nil {
 				t.Fatal(err)
 			}
 			// err 表示保存测试 API Key 的错误。
@@ -73,8 +78,11 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 
 			// captured 保存 AI 请求体，供断言实际模型和消息内容。
 			var captured map[string]any
+			// aiRequestCount 记录是否实际调用了 AI 服务。
+			aiRequestCount := 0
 			// aiServer 模拟 OpenAI 兼容接口并捕获实际请求。
 			aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				aiRequestCount++
 				// err 表示解析视觉模型请求体失败的原因。
 				if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
 					t.Errorf("解析 AI 请求: %v", err)
@@ -91,7 +99,7 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 			}
 
 			// message 是携带买家图片的真实引擎消息模型；图片 URL 只存在于当前 Raw 消息中。
-			message := chatMsg("能便宜点吗", "item-vision", "chat-vision")
+			message := chatMsg(testCase.messageText, "item-vision", "chat-vision")
 			message.Raw = map[string]any{
 				"1":     map[string]any{"10": map[string]any{"extJson": `{"contentType":"2"}`}},
 				"image": map[string]any{"pics": []any{map[string]any{"url": imageServer.URL + "/buyer.png"}}},
@@ -99,8 +107,18 @@ func TestAIReplyUsesOptionalVisionModelForBuyerImages(t *testing.T) {
 			// replier 是绑定测试数据库的 AI 回复服务。
 			replier := NewAIReplier("cid", store, nil)
 			// err 表示本轮 AI 回复处理失败的原因。
-			if _, err := replier.Reply(ctx, message); err != nil {
+			reply, err := replier.Reply(ctx, message)
+			if err != nil {
 				t.Fatalf("AI Reply: %v", err)
+			}
+			if testCase.wantNoReply {
+				if reply != nil || aiRequestCount != 0 || imageDownloadCount != 0 {
+					t.Fatalf("bargain_only 模式不应处理纯图片: reply=%+v aiRequests=%d imageDownloads=%d", reply, aiRequestCount, imageDownloadCount)
+				}
+				return
+			}
+			if aiRequestCount != 1 {
+				t.Fatalf("应调用一次 AI 服务，实际 %d 次", aiRequestCount)
 			}
 			if captured["model"] != testCase.wantModel {
 				t.Fatalf("模型=%v，期望 %s", captured["model"], testCase.wantModel)
