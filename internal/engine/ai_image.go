@@ -18,9 +18,12 @@ import (
 )
 
 const (
-	buyerImageMaxBytes  int64 = 5 << 20
+	// buyerImageMaxBytes 限制单张买家图片的原始字节数。
+	buyerImageMaxBytes int64 = 5 << 20
+	// buyerImageMaxPixels 限制图片解码配置允许的最大像素数。
 	buyerImageMaxPixels int64 = 16_000_000
-	buyerImageTimeout         = 8 * time.Second
+	// buyerImageTimeout 限制买家图片下载的最长耗时。
+	buyerImageTimeout = 8 * time.Second
 )
 
 // newBuyerImageHTTPClient 创建只允许访问公网地址的买家图片客户端。
@@ -33,8 +36,9 @@ func isBuyerImageMessage(message ChatMessage) bool {
 	if message.Raw == nil {
 		return false
 	}
-	// messageBody 和 messageExtra 保存平台消息主体与扩展字段。
+	// messageBody 保存平台消息主体；ok 表示主体字段是否存在。
 	messageBody, _ := message.Raw["1"].(map[string]any)
+	// messageExtra 保存平台消息扩展字段。
 	messageExtra, _ := messageBody["10"].(map[string]any)
 	return messageContentType(messageBody, messageExtra) == "2"
 }
@@ -64,6 +68,7 @@ func downloadBuyerImageDataURL(ctx context.Context, rawURL string) (string, erro
 	}
 	// client 强制使用公网访问策略，拒绝私网、回环地址和跨主机重定向。
 	client := newBuyerImageHTTPClient()
+	// response 保存图片服务器响应；err 保存网络请求失败原因。
 	response, err := client.Do(request)
 	if err != nil {
 		return "", fmt.Errorf("下载买家图片失败")
