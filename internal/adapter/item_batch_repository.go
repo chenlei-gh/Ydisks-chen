@@ -215,7 +215,7 @@ func (r *ItemBatchRepository) DeleteBatch(ctx context.Context, userID int64, bat
 	if err := r.validate(); err != nil {
 		return err
 	}
-	// batch 保存删除前的上传目录，路径只在适配器内使用。
+	// batch、err 分别保存删除前的上传目录快照和批次读取错误。
 	batch, err := r.store.PublishBatches.Get(ctx, userID, batchID)
 	if err != nil {
 		return err
