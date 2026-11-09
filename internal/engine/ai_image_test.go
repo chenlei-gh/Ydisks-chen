@@ -21,6 +21,7 @@ func buyerPNGForTest(t *testing.T, width, height int) []byte {
 	source := image.NewGray(image.Rect(0, 0, width, height))
 	// encoded 保存 PNG 编码结果。
 	var encoded bytes.Buffer
+	// err 表示测试 PNG 编码失败原因。
 	if err := png.Encode(&encoded, source); err != nil {
 		t.Fatalf("编码测试 PNG: %v", err)
 	}
@@ -43,11 +44,13 @@ func TestExtractBuyerImageURLOnlyAcceptsImageMessages(t *testing.T) {
 		"1":     map[string]any{"10": map[string]any{"extJson": `{"contentType":"2"}`}},
 		"image": map[string]any{"pics": []any{map[string]any{"url": "https://images.example/buyer.png"}}},
 	}}
+	// got 保存图片消息的提取结果。
 	if got := extractBuyerImageURL(message); got != "https://images.example/buyer.png" {
 		t.Fatalf("图片消息 URL=%q", got)
 	}
 	// 非图片消息即使包含形似图片的 URL，也不得进入图片下载链。
 	message.Raw["1"].(map[string]any)["10"].(map[string]any)["extJson"] = `{"contentType":"1"}`
+	// got 保存文本消息的图片提取结果。
 	if got := extractBuyerImageURL(message); got != "" {
 		t.Fatalf("文本消息不应提取图片 URL: %q", got)
 	}
@@ -81,6 +84,7 @@ func TestExtractChatMessageRetainsImageOnlyBuyerMessage(t *testing.T) {
 func TestDownloadBuyerImageDataURLValidatesPNG(t *testing.T) {
 	// data 是小尺寸合法 PNG 的编码字节。
 	data := buyerPNGForTest(t, 2, 2)
+	// server 模拟返回图片内容的远端 CDN。
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write(data)
@@ -113,13 +117,16 @@ func TestDownloadBuyerImageDataURLRejectsInvalidAndOversizedImages(t *testing.T)
 		{name: "oversized", body: bytes.Repeat([]byte("x"), int(buyerImageMaxBytes+1))},
 		{name: "pixel limit", body: buyerPNGForTest(t, 4001, 4000)},
 	}
+	// testCase 是当前需要验证拒绝策略的响应样本。
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
+			// server 模拟返回当前异常图片数据的远端服务。
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write(testCase.body)
 			}))
 			defer server.Close()
 			withBuyerImageHTTPClient(t, server.Client())
+			// err 表示无效或超限图片被错误接受时的返回状态。
 			if _, err := downloadBuyerImageDataURL(context.Background(), server.URL); err == nil {
 				t.Fatal("无效或超限图片应被拒绝")
 			}
@@ -131,12 +138,14 @@ func TestDownloadBuyerImageDataURLRejectsInvalidAndOversizedImages(t *testing.T)
 func TestDownloadBuyerImageDataURLRejectsLoopback(t *testing.T) {
 	// data 是有效图片字节；若公网策略失效，测试服务器会成功返回该图片。
 	data := buyerPNGForTest(t, 1, 1)
+	// server 是本机回环目标，只有公网策略生效时才会拒绝连接。
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(data)
 	}))
 	defer server.Close()
 	// newBuyerImageHTTPClient 使用生产公网客户端，真实验证回环目标在有服务监听时仍被拒绝。
 	withBuyerImageHTTPClient(t, netguard.PublicHTTPClient(buyerImageTimeout))
+	// err 表示公网客户端错误地允许了回环目标。
 	if _, err := downloadBuyerImageDataURL(context.Background(), server.URL); err == nil {
 		t.Fatal("回环地址必须被公网策略拒绝")
 	}
