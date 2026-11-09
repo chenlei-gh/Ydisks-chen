@@ -173,6 +173,10 @@ type PublishInput struct {
 	// BeforePublish 在图片上传和类目准备完成、最终商品创建请求发出前执行。
 	// 持久化操作层应在此处完成 prepared -> started；失败时平台创建请求不得发出。
 	BeforePublish func(context.Context) error
+	// OperationID 是客户端为一次逻辑发布生成并在网络重试中复用的稳定标识。
+	OperationID string
+	// RequestFingerprint 是服务端对规范化发布内容及图片哈希计算的 SHA-256。
+	RequestFingerprint string
 }
 
 // PublishResult 是平台返回的商品结果，经过端口转换后不暴露平台 DTO。
@@ -247,6 +251,8 @@ type Service struct {
 	publisher PublishPort
 	// repository 保存平台成功后的本地商品记录。
 	repository ItemRepository
+	// operations 持久化单商品发布阶段；为空时仅用于兼容旧测试/调用方。
+	operations PublishOperationLedger
 }
 
 // NewService 创建单商品发布应用服务，并校验必需端口。
@@ -260,8 +266,25 @@ func NewService(publisher PublishPort, repository ItemRepository) (*Service, err
 	return &Service{publisher: publisher, repository: repository}, nil
 }
 
+// NewServiceWithOperationLedger 创建启用持久化操作账本的单商品发布服务。
+func NewServiceWithOperationLedger(publisher PublishPort, repository ItemRepository, operations PublishOperationLedger) (*Service, error) {
+	// service、err 保存基础服务实例及端口校验结果。
+	service, err := NewService(publisher, repository)
+	if err != nil {
+		return nil, err
+	}
+	if operations == nil {
+		return nil, errors.New("单商品发布操作账本不能为空")
+	}
+	service.operations = operations
+	return service, nil
+}
+
 // PublishSingle 执行发布用例；平台成功但本地保存失败时保留远端结果供 HTTP 层提示补偿。
 func (svc *Service) PublishSingle(ctx context.Context, input PublishInput) (PublishOutcome, error) {
+	if svc.operations != nil {
+		return svc.publishSingleWithLedger(ctx, input)
+	}
 	if len(input.SKUs) > 0 {
 		// totalQuantity 汇总 SKU 库存，确保平台端口不依赖表单中的隐藏顶层库存字段。
 		totalQuantity := 0

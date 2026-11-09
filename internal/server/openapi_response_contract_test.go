@@ -31,6 +31,7 @@ func TestOpenAPISuccessContractCoverage(t *testing.T) {
 		{name: "accounts-and-system", run: TestOpenAPIAccountAndSystemResponses},
 		{name: "query-chat-orders", run: TestOpenAPIQueryChatAndOrderResponses},
 		{name: "items-and-cards", run: TestOpenAPIItemAndCardResponses},
+		{name: "single-publish-operation-status", run: TestOpenAPISinglePublishOperationStatus},
 		{name: "card-api-editor", run: TestCardAPIEditorContract},
 		{name: "notifications", run: TestOpenAPINotificationResponses},
 		{name: "versioned-session", run: TestVersionedSessionRoutesPreserveLegacyContracts},

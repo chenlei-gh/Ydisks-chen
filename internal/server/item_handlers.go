@@ -21,6 +21,7 @@ func (s *Server) mountItemsReal(r chi.Router) {
 	r.Post("/items/get-all-from-account", s.syncItemsFromAccount)
 	r.Post("/items/get-by-page", s.syncItemsPageFromAccount)
 	r.Post("/items/publish", s.publishItem)
+	r.Get("/items/publish-operations/{operation_id}", s.getSinglePublishOperation)
 	r.Post("/items/publish-categories/recommend", s.recommendItemPublishCategory)
 	r.Post("/items/publish-batches/preview", s.previewItemPublishBatch)
 	r.Post("/items/publish-batches", s.startItemPublishBatch)
@@ -151,43 +152,25 @@ func (s *Server) publishItem(w http.ResponseWriter, r *http.Request) {
 	for _, image := range specImages {
 		applicationSpecImages = append(applicationSpecImages, itemapp.Image{Filename: image.Filename, ContentType: image.ContentType, Data: image.Data})
 	}
-	// outcome、callErr 保存应用服务返回的发布结果及调用错误。
-	outcome, callErr := s.itemSinglePublishApplication().PublishSingle(r.Context(), itemapp.PublishInput{
+	// publishInput 保存已完成 HTTP 校验的应用层发布请求。
+	publishInput := itemapp.PublishInput{
 		UserID: userID, CookieID: cookieID, Title: title, Description: description,
 		PriceCents: priceCents, OriginalPriceCents: origCents, Quantity: quantity,
 		PostageMode: postageMode, PostageCents: postageCents, Location: applicationLocation,
 		Category: applicationCategory, Images: applicationImages, Specs: publishSpecs, SKUs: publishSKUs, SpecImages: applicationSpecImages,
-	})
+	}
+	// statusCode、message、prepareErr 保存操作账本准备失败时的 HTTP 状态、用户提示和内部错误。
+	statusCode, message, prepareErr := s.prepareSinglePublishOperation(r, &publishInput)
+	if prepareErr != nil {
+		writeErr(w, statusCode, message)
+		return
+	}
+	// outcome、callErr 保存应用服务返回的发布结果及调用错误。
+	outcome, callErr := s.itemSinglePublishApplication().PublishSingle(r.Context(), publishInput)
 	// res 用于本次流程后续判断的响应
 	res := outcome.Result
 	if callErr != nil {
-		// perr 用于本次流程后续判断的perr
-		var perr *itemapp.PublishError
-		if errors.As(callErr, &perr) {
-			// status 用于本次流程后续判断的状态
-			status := http.StatusBadGateway
-			// msg 用于本次流程后续判断的msg
-			msg := perr.Error()
-			if perr.Code == itemapp.PublishErrorStockPermissionMissing {
-				status = http.StatusForbidden
-				msg = "该账号没有库存发布权限，无法按库存数量发布商品"
-			}
-			writeErrCode(w, status, string(perr.Code), msg, "")
-			return
-		}
-		if strings.Contains(callErr.Error(), "账号凭证已变化") {
-			writeErr(w, http.StatusConflict, callErr.Error())
-			return
-		}
-		// message 保存未被专用错误类型包装的平台或基础设施失败原因，确保前端不会收到误导性的成功结果缺失提示。
-		message := strings.TrimSpace(callErr.Error())
-		if message == "" {
-			message = "商品发布失败"
-		}
-		if s.Logger != nil {
-			s.Logger.Error("商品发布失败", "cookie_id", cookieID, "err", callErr)
-		}
-		writeErrCode(w, http.StatusBadGateway, "publish_failed", message, "")
+		s.writeSinglePublishCallError(w, cookieID, callErr)
 		return
 	}
 	if res == nil || strings.TrimSpace(res.ItemID) == "" {

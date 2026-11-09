@@ -42,10 +42,12 @@ type Store struct {
 	UserSettings   *UserSettings
 	WSMessages     *WSMessageStore
 	PublishBatches *ItemPublishBatches
-	Tokens         *AccountTokens
-	Renewal        *RenewalStore
-	LoginLogs      *AccountLoginLogs
-	RiskLogs       *RiskControlLogs
+	// SinglePublishOperations 保存单商品发布的远端请求检查点，未知结果不得自动重发。
+	SinglePublishOperations *SinglePublishOperations
+	Tokens                  *AccountTokens
+	Renewal                 *RenewalStore
+	LoginLogs               *AccountLoginLogs
+	RiskLogs                *RiskControlLogs
 	// SecurityAudit 保存敏感配置访问审计记录。
 	SecurityAudit *SecurityAuditLogs
 	Chats         *ChatStore
@@ -83,42 +85,43 @@ func NewStore(db *sql.DB, dialect Dialect) *Store {
 	// items、orders 保存 Store 内共享的商品和订单仓储；Unit of Work 必须复用它们以保持方言与连接池一致。
 	items, orders := &Items{DB: db, Dialect: dialect}, &Orders{DB: db, Dialect: dialect}
 	return &Store{
-		DB:                db,
-		Dialect:           dialect,
-		Users:             &Users{DB: db},
-		Sessions:          &Sessions{DB: db, Dialect: dialect},
-		Cookies:           &Cookies{DB: db, Dialect: dialect, codec: codec},
-		Items:             items,
-		Cards:             &Cards{DB: db, Dialect: dialect, codec: codec},
-		Automation:        &AutomationRules{DB: db, Dialect: dialect, codec: codec},
-		DeliveryTemplates: &DeliveryTemplateStore{DB: db, Dialect: dialect},
-		Orders:            orders,
-		OrderWrites:       newOrderWriteUnitOfWork(db, orders, items),
-		Reconciliations:   &OrderReconciliations{DB: db, Dialect: dialect},
-		OrderRefreshJobs:  &OrderRefreshJobs{DB: db},
-		Keywords:          &Keywords{DB: db, Dialect: dialect},
-		DefaultReps:       &DefaultReplies{DB: db, Dialect: dialect},
-		ItemReps:          &ItemReplies{DB: db, Dialect: dialect},
-		ItemGreetings:     &ItemGreetings{DB: db, Dialect: dialect},
-		LibraryImages:     &LibraryImages{DB: db, Dialect: dialect},
-		ProductTemplates:  &ProductTemplates{DB: db, Dialect: dialect},
-		AIReply:           &AIReply{DB: db, Dialect: dialect, codec: codec},
-		ItemAISettings:    &ItemAISettings{DB: db, Dialect: dialect},
-		Notifications:     &Notifications{DB: db, Dialect: dialect, codec: codec},
-		Settings:          &SystemSettings{DB: db, Dialect: dialect, codec: codec},
-		UserSettings:      &UserSettings{DB: db, Dialect: dialect},
-		WSMessages:        &WSMessageStore{DB: db},
-		PublishBatches:    &ItemPublishBatches{DB: db},
-		Tokens:            &AccountTokens{DB: db, Dialect: dialect, codec: codec},
-		Renewal:           &RenewalStore{DB: db, Dialect: dialect},
-		LoginLogs:         &AccountLoginLogs{DB: db},
-		RiskLogs:          &RiskControlLogs{DB: db, Dialect: dialect},
-		SecurityAudit:     &SecurityAuditLogs{DB: db},
-		Chats:             &ChatStore{DB: db, Dialect: dialect},
-		AccountTasks:      &AccountTaskStore{DB: db, Dialect: dialect},
-		Admin:             &AdminQueries{DB: db},
-		Analytics:         &AnalyticsQueries{DB: db},
-		credentialLocks:   make(map[string]*credentialLockEntry),
+		DB:                      db,
+		Dialect:                 dialect,
+		Users:                   &Users{DB: db},
+		Sessions:                &Sessions{DB: db, Dialect: dialect},
+		Cookies:                 &Cookies{DB: db, Dialect: dialect, codec: codec},
+		Items:                   items,
+		Cards:                   &Cards{DB: db, Dialect: dialect, codec: codec},
+		Automation:              &AutomationRules{DB: db, Dialect: dialect, codec: codec},
+		DeliveryTemplates:       &DeliveryTemplateStore{DB: db, Dialect: dialect},
+		Orders:                  orders,
+		OrderWrites:             newOrderWriteUnitOfWork(db, orders, items),
+		Reconciliations:         &OrderReconciliations{DB: db, Dialect: dialect},
+		OrderRefreshJobs:        &OrderRefreshJobs{DB: db},
+		Keywords:                &Keywords{DB: db, Dialect: dialect},
+		DefaultReps:             &DefaultReplies{DB: db, Dialect: dialect},
+		ItemReps:                &ItemReplies{DB: db, Dialect: dialect},
+		ItemGreetings:           &ItemGreetings{DB: db, Dialect: dialect},
+		LibraryImages:           &LibraryImages{DB: db, Dialect: dialect},
+		ProductTemplates:        &ProductTemplates{DB: db, Dialect: dialect},
+		AIReply:                 &AIReply{DB: db, Dialect: dialect, codec: codec},
+		ItemAISettings:          &ItemAISettings{DB: db, Dialect: dialect},
+		Notifications:           &Notifications{DB: db, Dialect: dialect, codec: codec},
+		Settings:                &SystemSettings{DB: db, Dialect: dialect, codec: codec},
+		UserSettings:            &UserSettings{DB: db, Dialect: dialect},
+		WSMessages:              &WSMessageStore{DB: db},
+		PublishBatches:          &ItemPublishBatches{DB: db},
+		SinglePublishOperations: &SinglePublishOperations{DB: db},
+		Tokens:                  &AccountTokens{DB: db, Dialect: dialect, codec: codec},
+		Renewal:                 &RenewalStore{DB: db, Dialect: dialect},
+		LoginLogs:               &AccountLoginLogs{DB: db},
+		RiskLogs:                &RiskControlLogs{DB: db, Dialect: dialect},
+		SecurityAudit:           &SecurityAuditLogs{DB: db},
+		Chats:                   &ChatStore{DB: db, Dialect: dialect},
+		AccountTasks:            &AccountTaskStore{DB: db, Dialect: dialect},
+		Admin:                   &AdminQueries{DB: db},
+		Analytics:               &AnalyticsQueries{DB: db},
+		credentialLocks:         make(map[string]*credentialLockEntry),
 	}
 }
 

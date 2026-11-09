@@ -4313,6 +4313,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/items/publish-operations/{operation_id}":
+    get:
+      operationId: getApiV1ItemsPublishOperationsByoperation_id
+      summary: 查询单商品发布操作状态
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 当前用户可见的发布操作状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SinglePublishOperationResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 操作不存在或不属于当前用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/library/images":
     get:
       operationId: getApiV1LibraryImages
@@ -8939,10 +8981,19 @@ components:
         poi_id: {type: string}
         poi_name: {type: string}
         province: {type: string}
+    SinglePublishOperationResponse:
+      type: object
+      required: [operation_id, state, item_id, item_url]
+      properties:
+        operation_id: {type: string}
+        state: {type: string, enum: [prepared, started, remote_confirmed, local_confirmed, unknown]}
+        item_id: {type: string}
+        item_url: {type: string}
     ItemPublishRequest:
       type: object
       required: [cookie_id, title, description, price, original_price, quantity, postage_mode, postage, images]
       properties:
+        operation_id: {type: string, description: 同一次逻辑发布在网络重试中复用的稳定操作标识}
         cookie_id: {type: string}
         title: {type: string}
         description: {type: string}

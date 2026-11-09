@@ -1193,6 +1193,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/publish-operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询单商品发布操作状态 */
+        get: operations["getApiV1ItemsPublishOperationsByoperation_id"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/library/images": {
         parameters: {
             query?: never;
@@ -2715,7 +2732,16 @@ export interface components {
             poi_name?: string;
             province?: string;
         };
+        SinglePublishOperationResponse: {
+            operation_id: string;
+            /** @enum {string} */
+            state: "prepared" | "started" | "remote_confirmed" | "local_confirmed" | "unknown";
+            item_id: string;
+            item_url: string;
+        };
         ItemPublishRequest: {
+            /** @description 同一次逻辑发布在网络重试中复用的稳定操作标识 */
+            operation_id?: string;
             cookie_id: string;
             title: string;
             description: string;
@@ -10235,6 +10261,64 @@ export interface operations {
                 };
             };
             /** @description 统一错误响应 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getApiV1ItemsPublishOperationsByoperation_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前用户可见的发布操作状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SinglePublishOperationResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 操作不存在或不属于当前用户 */
             404: {
                 headers: {
                     [name: string]: unknown;

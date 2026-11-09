@@ -112,6 +112,7 @@ export const createItem = async (cookieId: string, data: Partial<Item>): Promise
 
 // publishItem 发布商品。
 export const publishItem = async (form: {
+    /** operation_id 是同一次发布在重试和页面恢复时复用的稳定标识；旧调用方可省略。 */ operation_id?: string;
     /** cookie_id 表示登录凭证标识。 */ cookie_id: string;
     /** title 表示标题。 */ title: string;
     /** description 表示描述。 */ description: string;
@@ -133,6 +134,7 @@ export const publishItem = async (form: {
 }): Promise<ItemPublishResponse> => {
     // body 请求体，用于当前 API 处理流程。
     const body = new FormData();
+    if (form.operation_id) body.set('operation_id', form.operation_id);
     body.set('cookie_id', form.cookie_id);
     body.set('title', form.title);
     body.set('description', form.description);
@@ -178,6 +180,19 @@ file of form.images) {
     }
     return runContractRequest(/* signal 控制商品发布上传请求的取消和超时。 */ signal => contractClient.POST('/api/v1/items/publish', { body: contractMultipartBody(body), signal })) as unknown as Promise<ItemPublishResponse>;
 }
+
+// getSinglePublishOperation 读取当前用户可见的单商品发布操作状态。
+export const getSinglePublishOperation = async (operationID: string): Promise<{
+    /** operation_id 是本次发布操作的稳定标识。 */
+    operation_id: string;
+    /** state 是服务端持久化的发布阶段。 */
+    state: 'prepared' | 'started' | 'remote_confirmed' | 'local_confirmed' | 'unknown';
+    item_id: string;
+    item_url: string;
+}> => runContractRequest(/* signal 控制发布操作状态查询请求的取消和超时。 */ signal => contractClient.GET('/api/v1/items/publish-operations/{operation_id}', {
+    params: { path: { operation_id: operationID } },
+    signal,
+}));
 
 // recommendPublishCategory 推荐商品发布分类。
 export const recommendPublishCategory = async (cookieId: string, keyword: string, options?: RequestControlOptions): Promise<CategoryRecommendationResponse> => {

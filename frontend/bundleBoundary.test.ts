@@ -16,6 +16,8 @@ const PAGE_CHUNK_BUDGETS: Record<string, number> = {
   CardList: 60 * 1024,
   // ItemList 页面新增列表视图与规则筛选，实际约 65.05 KiB，66 KiB 预算容纳该功能并保留少量余量。
   ItemList: 66 * 1024,
+  // 单商品发布操作恢复作为独立 feature chunk，限制新增逻辑体积且不放宽 ItemList 主分片预算。
+  'item-publish-operation': 8 * 1024,
   Settings: 30 * 1024,
   // Rules 页面包含模板发货模式入口、模板变量编辑器、规则筛选和商品首次回复面板，实际约 80 KiB，81 KiB 预算保留少量余量。
   Rules: 81 * 1024,

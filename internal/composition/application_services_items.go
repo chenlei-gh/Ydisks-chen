@@ -136,9 +136,10 @@ func buildItemCatalogServices(dependencies Dependencies, sessionRecovery adapter
 		return itemCatalogServices{}, fmt.Errorf("构造批量预检持久化服务失败: %w", itemBatchPreviewPersistenceErr)
 	}
 	// itemSinglePublish 是单商品发布应用服务及其基础设施端口的构造结果。
-	itemSinglePublish, itemSinglePublishErr := itemapp.NewService(
+	itemSinglePublish, itemSinglePublishErr := itemapp.NewServiceWithOperationLedger(
 		itemPublishPort,
 		dependencies.ItemDependencies.NewItemPublishRepository(),
+		dependencies.ItemDependencies.NewSinglePublishOperationRepository(),
 	)
 	if itemSinglePublishErr != nil {
 		return itemCatalogServices{}, fmt.Errorf("构造单商品发布服务失败: %w", itemSinglePublishErr)

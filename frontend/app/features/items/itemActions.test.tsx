@@ -10,6 +10,7 @@ vi.mock('./api', /* itemActionsApiMockFactory 提供商品动作 Hook 的确定�
   createItem: vi.fn(),
   deleteItem: vi.fn(),
   getPublishLocations: vi.fn(),
+  getSinglePublishOperation: vi.fn(),
   itemErrorMessage: /* errorMessageMock 将测试动作中的异常转换为稳定回退文本。 */ (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback,
   publishItem: vi.fn(),
   recommendPublishCategory: vi.fn(),

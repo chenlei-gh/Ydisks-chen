@@ -1,7 +1,8 @@
 import { useCallback,useEffect,useRef,useState,type Dispatch,type SetStateAction } from 'react';
 import type { Item } from './api';
 import type { PublishLocation } from './api';
-import { createItem,deleteItem,getPublishLocations,itemErrorMessage,publishItem,recommendPublishCategory as recommendItemPublishCategory,syncItemsFromAccount,updateItem } from './api';
+import { createItem,deleteItem,getPublishLocations,itemErrorMessage,recommendPublishCategory as recommendItemPublishCategory,syncItemsFromAccount,updateItem } from './api';
+import { clearSinglePublishOperationID,getOrCreateSinglePublishOperationID,getSinglePublishOperation,publishSingleItem } from './singlePublishOperation';
 import type { PublishSkuRow, PublishSpec } from '../../../shared/ui/publish/publishSpecs';
 import type { PublishCategory } from './types';
 
@@ -146,6 +147,7 @@ export interface ItemActionsState {
   // locateForPublish 获取普通或批量发布使用的发货地。
   locateForPublish: (batch: boolean) => Promise<void>;
 }
+
 
 // emptyAddItemForm 创建手动添加商品表单的初始值。
 export const emptyAddItemForm = (): AddItemForm => ({ cookie_id: '', item_id: '', item_title: '', item_price: '', item_image: '' });
@@ -334,12 +336,17 @@ export const useItemActions = ({ selectedAccount, setSelectedAccount, setItems, 
     if (publishForm.images.length === 0) return alert('至少上传 1 张商品图片');
     if (publishForm.postage_mode === 'fixed' && !publishForm.postage.trim()) return alert('请填写一口价邮费');
     setPublishing(true);
+    // operationID 在 try/catch 外保存，失败时可查询服务端的持久化状态。
+    let operationID = '';
     try {
       // result 保存平台发布接口返回的商品信息。
       const totalQuantity = publishForm.specs.length > 0 ? publishForm.skuRows.reduce(/* total、row 汇总各 SKU 的库存。 */ (total, row) => total + (Number(row.quantity) || 0), 0) : Number(publishForm.quantity);
+      // operationID 保存当前表单在刷新和网络重试时复用的操作标识。
+      operationID = await getOrCreateSinglePublishOperationID(publishForm, publishLocation, publishCategory);
       // result 保存平台发布接口返回的商品信息。
-      const result = await publishItem({ ...publishForm, quantity: totalQuantity, location: publishLocation || undefined, category: publishCategory || undefined });
+      const result = await publishSingleItem({ ...publishForm, operation_id: operationID, quantity: totalQuantity, location: publishLocation || undefined, category: publishCategory || undefined });
       await loadItems();
+      clearSinglePublishOperationID(publishForm.cookie_id, operationID);
       setShowPublishModal(false);
       setPublishForm(emptyPublishItemForm(selectedAccount || ''));
       setPublishCategoryKeyword('');
@@ -356,7 +363,21 @@ export const useItemActions = ({ selectedAccount, setSelectedAccount, setItems, 
       }
     } catch (/* error 表示商品发布请求异常。 */ error: unknown) {
       console.error('发布商品失败:', error);
-      alert(itemErrorMessage(error, '发布失败，请重试'));
+      // statusHint 根据服务端持久化状态提示安全的下一步，绝不自动重发 started/unknown 操作。
+      let statusHint = '';
+      if (operationID) {
+        try {
+          // operation 保存本次请求在服务端的最终可见检查点。
+          const operation = await getSinglePublishOperation(operationID);
+          if (operation.state === 'remote_confirmed') statusHint = '平台已确认商品 ID ' + operation.item_id + '，再次使用相同表单提交只会恢复本地保存，不会再次创建商品。';
+          else if (operation.state === 'local_confirmed') statusHint = '发布已确认成功，商品 ID：' + operation.item_id + '。';
+          else if (operation.state === 'started' || operation.state === 'unknown') statusHint = '平台请求可能已经发出但结果未确认。请先人工核对闲鱼商品，不要重新创建。';
+          else if (operation.state === 'prepared') statusHint = '最终创建请求尚未通过持久化闸门；可在不改变表单内容的情况下安全重试。';
+        } catch {
+          statusHint = '暂时无法读取服务端操作状态，请勿据此判断平台是否发布成功。';
+        }
+      }
+      alert(itemErrorMessage(error, '发布失败，请重试') + (statusHint ? '\\n\\n' + statusHint : ''));
     } finally {
       setPublishing(false);
     }

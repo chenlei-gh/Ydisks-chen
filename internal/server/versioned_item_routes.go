@@ -17,6 +17,7 @@ func (s *Server) mountVersionedItems(r chi.Router) {
 		r.Get("/api/v1/items/{cookie_id}/{item_id}/ai-settings", s.getItemAISettings)
 		r.Post("/api/v1/items/{cookie_id}", s.createItem)
 		r.Post("/api/v1/items/publish", s.publishItem)
+		r.Get("/api/v1/items/publish-operations/{operation_id}", s.getSinglePublishOperation)
 		r.Put("/api/v1/items/{cookie_id}/{item_id}", s.updateItem)
 		r.Put("/api/v1/items/{cookie_id}/{item_id}/ai-settings", s.updateItemAISettings)
 		r.Delete("/api/v1/items/{cookie_id}/{item_id}", s.deleteItem)

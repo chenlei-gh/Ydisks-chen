@@ -65,6 +65,10 @@ export default defineConfig({
         manualChunks(id) {
           // modulePath 是统一分隔符后的模块绝对路径，用于稳定匹配依赖目录。
           const modulePath = id.split(path.sep).join('/');
+          // 单商品发布的持久化恢复提示与请求协调独立成块，避免商品列表主分片超出预算。
+          if (modulePath.includes('/app/features/items/singlePublishOperation.')) {
+            return 'item-publish-operation';
+          }
           // 聊天接口适配器在列表、发送和未知结果收口之间复用，独立分片保持聊天主页面预算稳定。
           if (modulePath.includes('/app/features/chat/api.')) {
             return 'chat-api';
