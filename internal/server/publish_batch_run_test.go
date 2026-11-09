@@ -632,3 +632,118 @@ func TestCreatePublishAutomationRules(t *testing.T) {
 
 // 编译期保证 mtop 包引用。
 var _ = mtop.NewClient
+
+
+// TestRunItemPublishBatchPreservesPartialSuccess 验证一行发布失败不会回滚或污染同批次已成功的其他行。
+func TestRunItemPublishBatchPreservesPartialSuccess(t *testing.T) {
+	// srv、cleanup 保存 HTTP 测试服务器和资源清理函数。
+	srv, _, cleanup := newTestServer(t)
+	defer cleanup()
+	// publishCalls 记录最终商品创建请求次数，用于让第二行单独失败。
+	publishCalls := 0
+	setTestMTop(srv, withMTopTransport(roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		// u 保存当前 MTOP 请求地址，用于选择对应的平台响应。
+		u := req.URL.String()
+		// body 保存当前请求的默认成功响应。
+		body := `{"ret":["SUCCESS::调用成功"],"data":{}}`
+		switch {
+		case strings.Contains(u, "stream-upload.goofish.com"):
+			body = `{"object":{"url":"https://img.alicdn.com/published.png","pix":"800_800"}}`
+		case strings.Contains(u, "mtop.taobao.idle.kgraph.property.recommend"):
+			body = `{"ret":["SUCCESS::调用成功"],"data":{}}`
+		case strings.Contains(u, "mtop.idle.pc.idleitem.publish"):
+			publishCalls++
+			if publishCalls == 1 {
+				body = `{"ret":["SUCCESS::调用成功"],"data":{"itemId":"partial-success-item","url":"https://x/item/partial-success-item","picUrl":"https://img.alicdn.com/published.png","categoryId":"5001","categoryName":"虚拟商品","title":"商品A","priceText":"12.50","quantity":"5"}}`
+			} else {
+				body = `{"ret":["FAIL_SYS_PERMISSION::第二行无发布权限"],"data":{}}`
+			}
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    req,
+		}, nil
+	})))
+
+	// h 保存装配完整批量发布应用服务的 HTTP 路由。
+	h := srv.Router()
+	// cookie 保存当前测试管理员的登录会话。
+	cookie := loginHelper(t, h)
+	// batchID 保存包含两条有效商品行的预检批次标识。
+	batchID := previewTwoRowPublishBatch(t, h, cookie)
+	// startReq 保存启动批量任务的 HTTP 请求。
+	startReq := httptest.NewRequest(http.MethodPost, "/items/publish-batches", strings.NewReader(`{"preview_id":"`+batchID+`"}`))
+	startReq.AddCookie(cookie)
+	// startRec 捕获批量任务启动响应。
+	startRec := httptest.NewRecorder()
+	h.ServeHTTP(startRec, startReq)
+	if startRec.Code != http.StatusOK {
+		t.Fatalf("start status=%d body=%s", startRec.Code, startRec.Body.String())
+	}
+
+	// deadline 限制批次轮询时长，避免 worker 故障时测试永久等待。
+	deadline := time.Now().Add(8 * time.Second)
+	// status 保存轮询期间观察到的最新批次状态。
+	var status any
+	for time.Now().Before(deadline) {
+		// req 保存当前批次详情读取请求。
+		req := httptest.NewRequest(http.MethodGet, "/items/publish-batches/"+batchID, nil)
+		req.AddCookie(cookie)
+		// rec 捕获当前批次详情响应。
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code == http.StatusOK {
+			// got 保存当前批次详情 JSON。
+			var got map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode batch detail: %v", err)
+			}
+			status = got["status"]
+			if status != "running" && status != "pending" {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if status == "running" || status == "pending" {
+		t.Fatalf("批次应在 8s 内完成，当前状态=%v", status)
+	}
+
+	// resultReq 保存批次最终结果读取请求。
+	resultReq := httptest.NewRequest(http.MethodGet, "/items/publish-batches/"+batchID, nil)
+	resultReq.AddCookie(cookie)
+	// resultRec 捕获批次最终结果响应。
+	resultRec := httptest.NewRecorder()
+	h.ServeHTTP(resultRec, resultReq)
+	if resultRec.Code != http.StatusOK {
+		t.Fatalf("detail status=%d body=%s", resultRec.Code, resultRec.Body.String())
+	}
+	// result 保存批次汇总与逐行结果。
+	var result map[string]any
+	if err := json.Unmarshal(resultRec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode final batch: %v", err)
+	}
+	if result["status"] != "partially_failed" || result["success"] != float64(1) || result["failed"] != float64(1) {
+		t.Fatalf("部分成功汇总异常: %+v", result)
+	}
+	// rows 保存服务端按原始行号返回的两条执行结果。
+	rows, ok := result["rows"].([]any)
+	if !ok || len(rows) != 2 {
+		t.Fatalf("rows=%+v want 2 rows", result["rows"])
+	}
+	// first 保存第一行成功商品的结果。
+	first, _ := rows[0].(map[string]any)
+	// second 保存第二行失败商品的结果。
+	second, _ := rows[1].(map[string]any)
+	if first["status"] != "success" || first["item_id"] != "partial-success-item" {
+		t.Fatalf("第一行成功检查点丢失: %+v", first)
+	}
+	if second["status"] != "failed" || !strings.Contains(fmt.Sprint(second["error_message"]), "无发布权限") {
+		t.Fatalf("第二行失败未独立记录: %+v", second)
+	}
+	if publishCalls != 2 {
+		t.Fatalf("publish calls=%d want 2", publishCalls)
+	}
+}
