@@ -697,8 +697,9 @@ func TestRunItemPublishBatchPreservesPartialSuccess(t *testing.T) {
 		if rec.Code == http.StatusOK {
 			// got 保存当前批次详情 JSON。
 			var got map[string]any
-			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-				t.Fatalf("decode batch detail: %v", err)
+			// decodeErr 保存当前批次详情 JSON 的反序列化错误。
+			if decodeErr := json.Unmarshal(rec.Body.Bytes(), &got); decodeErr != nil {
+				t.Fatalf("decode batch detail: %v", decodeErr)
 			}
 			status = got["status"]
 			if status != "running" && status != "pending" {
@@ -722,13 +723,14 @@ func TestRunItemPublishBatchPreservesPartialSuccess(t *testing.T) {
 	}
 	// result 保存批次汇总与逐行结果。
 	var result map[string]any
-	if err := json.Unmarshal(resultRec.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode final batch: %v", err)
+	// decodeErr 保存最终批次结果 JSON 的反序列化错误。
+	if decodeErr := json.Unmarshal(resultRec.Body.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("decode final batch: %v", decodeErr)
 	}
 	if result["status"] != "partially_failed" || result["success"] != float64(1) || result["failed"] != float64(1) {
 		t.Fatalf("部分成功汇总异常: %+v", result)
 	}
-	// rows 保存服务端按原始行号返回的两条执行结果。
+	// rows、ok 保存服务端按原始行号返回的两条执行结果及类型断言结果。
 	rows, ok := result["rows"].([]any)
 	if !ok || len(rows) != 2 {
 		t.Fatalf("rows=%+v want 2 rows", result["rows"])
@@ -740,7 +742,9 @@ func TestRunItemPublishBatchPreservesPartialSuccess(t *testing.T) {
 	if first["status"] != "success" || first["item_id"] != "partial-success-item" {
 		t.Fatalf("第一行成功检查点丢失: %+v", first)
 	}
-	if second["status"] != "failed" || !strings.Contains(fmt.Sprint(second["error_message"]), "无发布权限") {
+	// secondError 保存第二行的失败原因文本。
+	secondError, _ := second["error_message"].(string)
+	if second["status"] != "failed" || !strings.Contains(secondError, "无发布权限") {
 		t.Fatalf("第二行失败未独立记录: %+v", second)
 	}
 	if publishCalls != 2 {
