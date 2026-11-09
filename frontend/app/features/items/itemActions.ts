@@ -170,6 +170,7 @@ const readPublishFileBytes = async (file: File): Promise<Uint8Array> => {
 const stablePublishHash = (bytes: Uint8Array): string => {
   // hashA、hashB 是两组独立的 32 位非密码学哈希状态。
   let hashA = 2166136261;
+  // hashB 是第二组独立的 32 位非密码学哈希状态。
   let hashB = 5381;
   for (const /* byte 是当前输入中的单个字节。 */ byte of bytes) {
     hashA = Math.imul(hashA ^ byte, 16777619);
