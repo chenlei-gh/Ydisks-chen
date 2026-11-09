@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -214,5 +215,115 @@ func TestBatchPublishLocationSupportsV102JSON(t *testing.T) {
 	location, locationErr := batchPublishLocation(raw)
 	if locationErr != nil || location == nil || location.Area != "西湖区" || location.City != "杭州市" || location.DivisionID != "330106" || location.Longitude != 120.118 || location.Latitude != 30.259 || location.POIID != "B0FFG7" || location.POIName != "西湖文化广场" || location.Province != "浙江省" {
 		t.Fatalf("v1.0.2 历史发货地恢复异常: location=%+v err=%v", location, locationErr)
+	}
+}
+
+// TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure 验证远端超时及远端成功后检查点写入失败都不会被普通重试重放。
+func TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure(t *testing.T) {
+	// scenarios 覆盖远端请求结果未知和远端已成功但本地检查点写入失败两种边界。
+	scenarios := []struct {
+		name                string
+		remoteResult        *mtop.PublishItemResult
+		remoteErr           error
+		failCheckpointWrite bool
+	}{
+		{name: "remote timeout", remoteErr: context.DeadlineExceeded},
+		{name: "checkpoint persistence failure", remoteResult: &mtop.PublishItemResult{ItemID: "remote-checkpoint-fail", ItemURL: "https://example.test/item/remote-checkpoint-fail"}, failCheckpointWrite: true},
+	}
+	// scenario 表示当前遍历的故障场景。
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			// store、cleanup 保存当前场景独占的 SQLite 存储及清理函数。
+			store, cleanup := newAdapterTestStore(t)
+			defer cleanup()
+			// ctx 是当前场景共用的非取消上下文。
+			ctx := context.Background()
+			// admin、adminErr 保存批次所属用户及读取错误。
+			admin, adminErr := store.Users.GetByUsername(ctx, "admin")
+			if adminErr != nil {
+				t.Fatalf("读取测试用户失败: %v", adminErr)
+			}
+			// locationJSON 保存有效的批次发货地快照。
+			locationJSON, locationErr := json.Marshal(mtop.PublishLocation{Area: "西湖区", City: "杭州市", DivisionID: "330106", Province: "浙江省"})
+			if locationErr != nil {
+				t.Fatalf("序列化发货地失败: %v", locationErr)
+			}
+			// batch 保存当前场景待发布的批次。
+			batch := &db.ItemPublishBatch{ID: "batch-uncertain-" + strings.ReplaceAll(scenario.name, " ", "-"), UserID: admin.ID, DefaultCookieID: "cid", UploadDir: t.TempDir(), LocationJSON: string(locationJSON), Status: "pending"}
+			// rows 保存一条带本地图片的待发布商品明细。
+			rows := []db.ItemPublishBatchRow{{RowNo: 1, CookieID: "cid", Title: "不确定结果商品", Description: "测试", Price: "12.50", Quantity: 1, PostageMode: "free", ImagesJSON: `["a.png"]`, CategoryJSON: `{"cat_id":"1","cat_name":"类目","channel_cat_id":"2"}`, Status: "pending"}}
+			// createErr 保存创建测试批次的持久化错误。
+			if createErr := store.PublishBatches.Create(ctx, batch, rows); createErr != nil {
+				t.Fatalf("创建批次失败: %v", createErr)
+			}
+			// workerToken 标识唯一持有本行发布权的 worker。
+			workerToken := "worker-uncertain"
+			// claimed、claimErr 保存当前 worker 领取批次的结果及错误。
+			claimed, claimErr := store.PublishBatches.ClaimBatch(ctx, batch.ID, workerToken, time.Now().Add(time.Minute).Unix())
+			if claimErr != nil || !claimed {
+				t.Fatalf("领取批次失败: claimed=%v err=%v", claimed, claimErr)
+			}
+			// storedRows、rowsErr 保存领取后的持久化明细。
+			storedRows, rowsErr := store.PublishBatches.Rows(ctx, batch.ID)
+			if rowsErr != nil || len(storedRows) != 1 {
+				t.Fatalf("读取批次明细失败: rows=%+v err=%v", storedRows, rowsErr)
+			}
+			// rowClaimed、rowClaimErr 保存当前 worker 领取明细行的结果及错误。
+			if rowClaimed, rowClaimErr := store.PublishBatches.ClaimRow(ctx, storedRows[0].ID, workerToken); rowClaimErr != nil || !rowClaimed {
+				t.Fatalf("领取明细失败: claimed=%v err=%v", rowClaimed, rowClaimErr)
+			}
+			if scenario.failCheckpointWrite {
+				// trigger 让真实 SQLite 在远端结果写入 ItemID 时失败，模拟远端成功后的本地检查点故障。
+				_, triggerErr := store.DB.ExecContext(ctx, `CREATE TRIGGER fail_remote_publish_checkpoint
+					BEFORE UPDATE OF item_id ON item_publish_batch_rows
+					WHEN NEW.item_id = 'remote-checkpoint-fail'
+					BEGIN SELECT RAISE(ABORT, 'injected remote checkpoint failure'); END`)
+				if triggerErr != nil {
+					t.Fatalf("创建故障注入触发器失败: %v", triggerErr)
+				}
+			}
+			// publishCalls 记录最终远端发布调用次数。
+			publishCalls := 0
+			// client 按场景返回超时或远端成功结果。
+			client := batchPublishClientStub{publish: func(context.Context, string, mtop.PublishItemRequest) (*mtop.PublishItemResult, error) {
+				publishCalls++
+				return scenario.remoteResult, scenario.remoteErr
+			}}
+			// port 通过受控图片回调抵达最终远端发布边界。
+			port := NewItemBatchPublishPort(store, func() mtop.Client { return client }, nil, nil, nil,
+				func(_ string, ref string) ([]byte, string, string, error) {
+					return []byte("image"), "image/png", ref, nil
+				},
+				func(context.Context, string) ([]byte, string, error) { return nil, "", nil })
+			// _, publishErr 保存远端调用或远端检查点写入失败。
+			_, publishErr := port.PublishRemoteRow(ctx, admin.ID, batchRowApplicationModel(storedRows[0]), workerToken, nil)
+			// uncertainErr 验证两种情况均被明确分类为远端结果不确定。
+			var uncertainErr *itemapp.UncertainRemotePublishError
+			if !errors.As(publishErr, &uncertainErr) {
+				t.Fatalf("发布错误=%v，期望 UncertainRemotePublishError", publishErr)
+			}
+			if publishCalls != 1 {
+				t.Fatalf("远端发布调用次数=%d，期望 1", publishCalls)
+			}
+			// beforeWorkerFinalize 验证失败收口前仍保留 remote_started 检查点且没有 ItemID。
+			beforeWorkerFinalize, readErr := store.PublishBatches.Rows(ctx, batch.ID)
+			if readErr != nil || len(beforeWorkerFinalize) != 1 || beforeWorkerFinalize[0].FailureKind != "remote_started" || beforeWorkerFinalize[0].ItemID != "" {
+				t.Fatalf("未知结果必须保留远端开始检查点: rows=%+v err=%v", beforeWorkerFinalize, readErr)
+			}
+			// marked 模拟 worker 将不确定结果持久化为不可普通重试的失败行。
+			marked, markErr := store.PublishBatches.MarkClaimedRowFailed(ctx, storedRows[0].ID, workerToken, publishErr.Error(), "uncertain_remote")
+			if markErr != nil || !marked {
+				t.Fatalf("隔离未知结果失败: marked=%v err=%v", marked, markErr)
+			}
+			// resetErr 保存普通失败重试入口重置批次的执行结果。
+			if resetErr := store.PublishBatches.ResetFailed(ctx, batch.ID); resetErr != nil {
+				t.Fatalf("普通失败重置失败: %v", resetErr)
+			}
+			// finalRows 验证普通重试不能重新打开可能已在远端创建的商品行。
+			finalRows, finalErr := store.PublishBatches.Rows(ctx, batch.ID)
+			if finalErr != nil || len(finalRows) != 1 || finalRows[0].Status != "failed" || finalRows[0].FailureKind != "uncertain_remote" {
+				t.Fatalf("未知远端结果被普通重试重开: rows=%+v err=%v", finalRows, finalErr)
+			}
+		})
 	}
 }
