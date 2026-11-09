@@ -230,6 +230,7 @@ func TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure(t *testing.T
 		{name: "remote timeout", remoteErr: context.DeadlineExceeded},
 		{name: "checkpoint persistence failure", remoteResult: &mtop.PublishItemResult{ItemID: "remote-checkpoint-fail", ItemURL: "https://example.test/item/remote-checkpoint-fail"}, failCheckpointWrite: true},
 	}
+	// scenario 表示当前遍历的故障场景。
 	for _, scenario := range scenarios {
 		t.Run(scenario.name, func(t *testing.T) {
 			// store、cleanup 保存当前场景独占的 SQLite 存储及清理函数。
@@ -251,11 +252,13 @@ func TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure(t *testing.T
 			batch := &db.ItemPublishBatch{ID: "batch-uncertain-" + strings.ReplaceAll(scenario.name, " ", "-"), UserID: admin.ID, DefaultCookieID: "cid", UploadDir: t.TempDir(), LocationJSON: string(locationJSON), Status: "pending"}
 			// rows 保存一条带本地图片的待发布商品明细。
 			rows := []db.ItemPublishBatchRow{{RowNo: 1, CookieID: "cid", Title: "不确定结果商品", Description: "测试", Price: "12.50", Quantity: 1, PostageMode: "free", ImagesJSON: `["a.png"]`, CategoryJSON: `{"cat_id":"1","cat_name":"类目","channel_cat_id":"2"}`, Status: "pending"}}
+			// createErr 保存创建测试批次的持久化错误。
 			if createErr := store.PublishBatches.Create(ctx, batch, rows); createErr != nil {
 				t.Fatalf("创建批次失败: %v", createErr)
 			}
 			// workerToken 标识唯一持有本行发布权的 worker。
 			workerToken := "worker-uncertain"
+			// claimed、claimErr 保存当前 worker 领取批次的结果及错误。
 			claimed, claimErr := store.PublishBatches.ClaimBatch(ctx, batch.ID, workerToken, time.Now().Add(time.Minute).Unix())
 			if claimErr != nil || !claimed {
 				t.Fatalf("领取批次失败: claimed=%v err=%v", claimed, claimErr)
@@ -265,6 +268,7 @@ func TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure(t *testing.T
 			if rowsErr != nil || len(storedRows) != 1 {
 				t.Fatalf("读取批次明细失败: rows=%+v err=%v", storedRows, rowsErr)
 			}
+			// rowClaimed、rowClaimErr 保存当前 worker 领取明细行的结果及错误。
 			if rowClaimed, rowClaimErr := store.PublishBatches.ClaimRow(ctx, storedRows[0].ID, workerToken); rowClaimErr != nil || !rowClaimed {
 				t.Fatalf("领取明细失败: claimed=%v err=%v", rowClaimed, rowClaimErr)
 			}
@@ -311,6 +315,7 @@ func TestItemBatchPublishPortQuarantinesTimeoutAndCheckpointFailure(t *testing.T
 			if markErr != nil || !marked {
 				t.Fatalf("隔离未知结果失败: marked=%v err=%v", marked, markErr)
 			}
+			// resetErr 保存普通失败重试入口重置批次的执行结果。
 			if resetErr := store.PublishBatches.ResetFailed(ctx, batch.ID); resetErr != nil {
 				t.Fatalf("普通失败重置失败: %v", resetErr)
 			}
