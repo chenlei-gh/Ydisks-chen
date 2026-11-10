@@ -219,7 +219,17 @@ func (s *ChatStore) ClaimAutoReply(ctx context.Context, cookieID, chatID string)
 	if err != nil {
 		return false, err
 	}
-	return affected > 0, nil
+	if affected > 0 {
+		return true, nil
+	}
+	// 没有本地会话行时，历史调用方尚无机会设置人工模式，保持既有自动回复默认行为。
+	var mode string
+	if err := s.DB.QueryRowContext(ctx, `SELECT auto_reply_mode FROM chat_sessions WHERE cookie_id=? AND chat_id=?`, cookieID, chatID).Scan(&mode); errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	} else if err != nil {
+		return false, err
+	}
+	return mode == "auto", nil
 }
 
 // SetSessionVisible 更新平台会话是否出现在本地列表中。
