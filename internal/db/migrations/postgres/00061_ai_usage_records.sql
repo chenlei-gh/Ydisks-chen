@@ -13,7 +13,8 @@ CREATE TABLE ai_usage_records (
     status VARCHAR(16) NOT NULL,
     error_kind VARCHAR(64) NOT NULL DEFAULT '',
     usage_date CHAR(10) NOT NULL,
-    created_at_unix BIGINT NOT NULL
+    created_at_unix BIGINT NOT NULL,
+    FOREIGN KEY (cookie_id) REFERENCES cookies(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_ai_usage_cookie_date ON ai_usage_records(cookie_id, usage_date);
 CREATE INDEX idx_ai_usage_date ON ai_usage_records(usage_date);
