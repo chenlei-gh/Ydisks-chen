@@ -104,6 +104,18 @@ func TestAIUsageRecordsAndAggregatesByUser(t *testing.T) {
 			if _, err := target.store.AIUsage.DailySummaryForUser(ctx, 0, today, today); err != ErrInvalidUserID {
 				t.Fatalf("invalid user ID should be rejected, got %v", err)
 			}
+			// deleteErr 验证账号删除会级联清理用量记录，避免留下已删除账号的 AI 使用历史。
+			if _, deleteErr := target.store.DB.ExecContext(ctx, `DELETE FROM cookies WHERE id=?`, ownerCookie); deleteErr != nil {
+				t.Fatalf("delete usage owner account: %v", deleteErr)
+			}
+			// remaining 是账号删除后不应残留的用量记录数量。
+			var remaining int
+			if err := target.store.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_usage_records WHERE cookie_id=?`, ownerCookie).Scan(&remaining); err != nil {
+				t.Fatal(err)
+			}
+			if remaining != 0 {
+				t.Fatalf("deleted account usage records remain: %d", remaining)
+			}
 		})
 	}
 }
