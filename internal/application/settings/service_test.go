@@ -537,6 +537,9 @@ func TestServiceRejectsInvalidSettingsInputs(t *testing.T) {
 		{name: "upsert negative amount", run: func() error {
 			return service.UpsertAIReply(ctx, 7, "acc", AIReplySettings{MaxDiscountAmount: -1, MaxBargainRounds: 1})
 		}},
+		{name: "upsert negative completion tokens", run: func() error {
+			return service.UpsertAIReply(ctx, 7, "acc", AIReplySettings{MaxBargainRounds: 1, MaxCompletionTokens: -1})
+		}},
 		{name: "upsert zero rounds", run: func() error { return service.UpsertAIReply(ctx, 7, "acc", AIReplySettings{MaxBargainRounds: 0}) }},
 		{name: "upsert large rounds", run: func() error { return service.UpsertAIReply(ctx, 7, "acc", AIReplySettings{MaxBargainRounds: 11}) }},
 		{name: "upsert auto without AI", run: func() error {
