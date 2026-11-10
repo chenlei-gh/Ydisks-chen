@@ -176,7 +176,6 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 	return &ReplyResult{Text: reply, AutoPriceQuote: quote}, nil
 }
 
- 
 // requestAICompletion 构造多模态消息、调用模型并记录本次请求的 Token 用量。
 func (a *AIReplierImpl) requestAICompletion(ctx context.Context, m ChatMessage, aiCfg *globalAIConfig, history []db.AIConversationMessage, systemPrompt string) (*openai.ChatCompletionResponse, error) {
 	// clientCfg 保存当前账号模型服务的连接配置。
