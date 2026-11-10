@@ -106,22 +106,31 @@ func TestChatSendingWrappersMapOutgoingAndMediaMessages(t *testing.T) {
 	}
 }
 
+// TestChatOutgoingRepositoryRecordsManualReplyInAIConversationHistory 验证人工回复写入 AI 历史并拒绝客户端伪造的商品标识。
 func TestChatOutgoingRepositoryRecordsManualReplyInAIConversationHistory(t *testing.T) {
+	// store、cleanup 保存隔离数据库和释放函数。
 	store, cleanup := newAdapterTestStore(t)
 	defer cleanup()
+	// ctx 保存本用例共用的数据库操作上下文。
 	ctx := context.Background()
+	// repository 保存聊天外发仓储适配器。
 	repository := NewChatOutgoingRepository(domainchat.New(store), store)
+	// recorder、ok 保存可选人工 AI 上下文记录能力及其存在性。
 	recorder, ok := repository.(chatapp.ManualAIContextRecorder)
 	if !ok {
 		t.Fatal("chat outgoing repository must expose manual AI context recording")
 	}
+	// session 保存数据库中已存在的会话事实。
 	session := chatapp.Session{AccountID: "cid", ChatID: "manual-context-chat", PeerUserID: "buyer-1", ItemID: "item-1"}
+	// err 保存创建本地会话事实的结果。
 	if err := store.Chats.UpsertSession(ctx, db.ChatSession{CookieID: session.AccountID, ChatID: session.ChatID, BuyerID: session.PeerUserID, ItemID: session.ItemID}); err != nil {
 		t.Fatal(err)
 	}
+	// err 保存追加已确认人工回复的结果。
 	if err := recorder.RecordManualAIContext(ctx, session, "人工补充的商品说明"); err != nil {
 		t.Fatal(err)
 	}
+	// history、err 保存按账号、会话和商品读取的 AI 历史。
 	history, err := store.AIReply.ConversationHistory(ctx, session.AccountID, session.ChatID, session.ItemID, 10)
 	if err != nil || len(history) != 1 {
 		t.Fatalf("history=%+v err=%v", history, err)
@@ -129,12 +138,14 @@ func TestChatOutgoingRepositoryRecordsManualReplyInAIConversationHistory(t *test
 	if history[0].Role != "assistant" || history[0].Intent != "manual_reply" || history[0].Content != "人工补充的商品说明" {
 		t.Fatalf("manual context entry=%+v", history[0])
 	}
-	// 客户端提交的商品标识与本地会话不一致时，不得污染另一个商品的 AI 历史。
+	// mismatched 保存客户端提交的错误商品标识，验证它不会写入其他商品上下文。
 	mismatched := session
 	mismatched.ItemID = "other-item"
+	// err 保存错误商品标识被拒绝写入的结果。
 	if err := recorder.RecordManualAIContext(ctx, mismatched, "不应写入"); err != nil {
 		t.Fatal(err)
 	}
+	// otherHistory、err 保存错误商品标识对应的历史查询结果。
 	otherHistory, err := store.AIReply.ConversationHistory(ctx, session.AccountID, session.ChatID, "other-item", 10)
 	if err != nil || len(otherHistory) != 0 {
 		t.Fatalf("mismatched item history=%+v err=%v", otherHistory, err)
