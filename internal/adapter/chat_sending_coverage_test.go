@@ -106,6 +106,28 @@ func TestChatSendingWrappersMapOutgoingAndMediaMessages(t *testing.T) {
 	}
 }
 
+func TestChatOutgoingRepositoryRecordsManualReplyInAIConversationHistory(t *testing.T) {
+	store, cleanup := newAdapterTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	repository := NewChatOutgoingRepository(domainchat.New(store), store)
+	recorder, ok := repository.(chatapp.ManualAIContextRecorder)
+	if !ok {
+		t.Fatal("chat outgoing repository must expose manual AI context recording")
+	}
+	session := chatapp.Session{AccountID: "cid", ChatID: "manual-context-chat", PeerUserID: "buyer-1", ItemID: "item-1"}
+	if err := recorder.RecordManualAIContext(ctx, session, "人工补充的商品说明"); err != nil {
+		t.Fatal(err)
+	}
+	history, err := store.AIReply.ConversationHistory(ctx, session.AccountID, session.ChatID, session.ItemID, 10)
+	if err != nil || len(history) != 1 {
+		t.Fatalf("history=%+v err=%v", history, err)
+	}
+	if history[0].Role != "assistant" || history[0].Intent != "manual_reply" || history[0].Content != "人工补充的商品说明" {
+		t.Fatalf("manual context entry=%+v", history[0])
+	}
+}
+
 // TestChatSenderForwardsToRuntime 验证应用层发送器把文本与图片请求透传到账号运行时。
 func TestChatSenderForwardsToRuntime(t *testing.T) {
 	// ctx 是本测试发送器共用的上下文。
