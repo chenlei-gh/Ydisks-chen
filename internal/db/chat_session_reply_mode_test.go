@@ -19,6 +19,10 @@ func TestMultiDBChatSessionReplyModeAndClaim(t *testing.T) {
 				t.Fatalf("upsert session: %v", err)
 			}
 
+			// 尚未持久化会话行的旧调用路径没有机会设置人工模式，继续保持历史 auto 默认行为。
+			if claimed, claimErr := target.store.Chats.ClaimAutoReply(ctx, accountID, "not-yet-persisted"); claimErr != nil || !claimed {
+				t.Fatalf("missing session default claim=%v err=%v, want true", claimed, claimErr)
+			}
 			// 新会话及迁移后的旧会话均应以 auto 为安全默认值。
 			stored, err := target.store.Chats.FindSession(ctx, userID, accountID, session.ChatID)
 			if err != nil {
