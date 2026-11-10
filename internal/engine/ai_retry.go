@@ -100,11 +100,16 @@ func isAIQuotaFailure(response *http.Response) bool {
 
 // aiRetryDelay 返回 Retry-After 指定的等待时间；缺少或无效时使用短退避。
 func aiRetryDelay(response *http.Response) time.Duration {
-	const fallbackDelay = 250 * time.Millisecond
 	if response == nil {
-		return fallbackDelay
+		return 250 * time.Millisecond
 	}
-	value := strings.TrimSpace(response.Header.Get("Retry-After"))
+	return aiRetryDelayAt(response.Header.Get("Retry-After"), time.Now())
+}
+
+// aiRetryDelayAt 以给定时钟解析 Retry-After，便于确定性测试秒数和 HTTP 日期。
+func aiRetryDelayAt(value string, now time.Time) time.Duration {
+	const fallbackDelay = 250 * time.Millisecond
+	value = strings.TrimSpace(value)
 	if value == "" {
 		return fallbackDelay
 	}
@@ -112,7 +117,7 @@ func aiRetryDelay(response *http.Response) time.Duration {
 		return time.Duration(seconds) * time.Second
 	}
 	if retryAt, err := http.ParseTime(value); err == nil {
-		delay := time.Until(retryAt)
+		delay := retryAt.Sub(now)
 		if delay > 0 {
 			return delay
 		}
