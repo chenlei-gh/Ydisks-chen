@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -95,13 +96,25 @@ func NewChatOutgoingRepository(service *domainchat.Service, stores ...*db.Store)
 }
 
 func (r chatOutgoingRepository) RecordManualAIContext(ctx context.Context, session chatapp.Session, text string) error {
-	if r.store == nil || r.store.AIReply == nil {
+	if r.store == nil || r.store.AIReply == nil || r.store.DB == nil {
 		return chatapp.ErrUnavailable
 	}
 	if session.ItemID == "" || session.PeerUserID == "" || strings.TrimSpace(text) == "" {
 		return nil
 	}
-	return r.store.AIReply.AddConversation(ctx, session.AccountID, session.ChatID, session.PeerUserID, session.ItemID, db.AIConversationMessage{
+	// itemID 与 buyerID 必须来自本地会话事实，不能信任手动发送请求中可由客户端填写的商品标识。
+	var itemID, buyerID string
+	lookupErr := r.store.DB.QueryRowContext(ctx, `SELECT item_id,buyer_id FROM chat_sessions WHERE cookie_id=? AND chat_id=?`, session.AccountID, session.ChatID).Scan(&itemID, &buyerID)
+	if errors.Is(lookupErr, sql.ErrNoRows) || (lookupErr == nil && (itemID == "" || itemID != session.ItemID)) {
+		return nil
+	}
+	if lookupErr != nil {
+		return lookupErr
+	}
+	if buyerID == "" {
+		buyerID = session.PeerUserID
+	}
+	return r.store.AIReply.AddConversation(ctx, session.AccountID, session.ChatID, buyerID, itemID, db.AIConversationMessage{
 		Role: "assistant", Content: text, Intent: "manual_reply",
 	})
 }
