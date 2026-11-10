@@ -317,6 +317,16 @@
 - **边界**：上述结论只覆盖本地自动化测试与 CI，不代表真实闲鱼商品发布、图片上传或远端幂等行为已验证；真实账号/订单 E2E 继续暂停。
 
 
+### 2026-11-10 阶段 5.5 实施进展（PR #19）
+
+- **代码已提交到独立分支**：PR [#19](https://github.com/chenlei-gh/Ydisks-chen/pull/19)，head `760916f84855dda79c2d16c46ef86375186730b5`，目标分支为 PR #18 的 `ydisks-reliability/chat-manual-handoff`（堆叠 PR；PR #18 拥有 00061 迁移，本 PR 不新增迁移）。
+- **人工回复接入**：新增可选 ManualAIContextRecorder 端口；聊天人工 SendText 在平台明确返回成功后追加一条 assistant/manual_reply；自动回复 SendReply 改走共享私有发送逻辑并显式跳过人工上下文记录。失败与 uncertain 不记录；上下文记录失败仅写告警，不把远端已成功发送变成可重试错误。
+- **可信会话校验**：适配器追加历史前从 chat_sessions 读取本地 item_id/buyer_id；客户端提交的 item_id 与本地会话不一致或会话不存在时不写入，避免污染其他商品上下文。
+- **上下文预算**：最多 10 条历史消息，单条最多 2000 rune；“历史 + 当前买家消息”最多 8000 rune，按最新消息优先保留完整消息。该上限是跨模型稳定的字符代理，不是精确 tokenizer token 计数；system prompt 不包含在此字符预算内。
+- **新增回归测试**：人工成功写入、失败/uncertain 不写入、AI 历史记录失败不触发发送重试、自动回复不重复记录、数据库历史落库与客户端伪造商品标识拒绝、历史条数/总 rune 预算与最近完整消息保留。
+- **验证状态**：最初 CI run [42766254430](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42766254430) 在中文注释检查失败，尚未进入 Go 测试；已按项目 commentlint 规则补齐新增代码和测试注释。最新 head 的 CI run `42766547781` 正在排队/等待执行，尚无测试通过结论；不合并。
+- **剩余边界**：AI 历史追加与 chat_messages 的 sent 状态不是同一事务；记录失败会留下告警但不阻断已成功发送。初期采用轻量 best-effort，后续根据真实失败证据决定是否需要持久化重试机制。摘要暂不增加额外模型调用，先用硬字符预算限制历史；摘要机制暂不标记完成。
+
 ### 2026-11-10 阶段 5.5 会话上下文二次审计与实现边界
 
 - **人工发送入口已确认**：聊天 HTTP handler 的人工文字发送直接调用 chat application 的 SendText；自动回复则经 adapter 的 chatReplyDelivery.SendReply 进入同一 application 服务。SendReply 当前内部也调用 SendText，因此如果仅在 SendText 成功后记录人工上下文，会把自动回复重复写入 AI 历史；实现时必须将共享发送逻辑下沉为私有方法，并由人工 SendText 与自动 SendReply 分别明确是否记录，不能仅依赖调用来源猜测。
