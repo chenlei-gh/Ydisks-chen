@@ -103,9 +103,13 @@ func newChatSessionDTOFromApplication(session chatapp.Session) chatSessionDTO {
 	if accountRole != "seller" && accountRole != "buyer" {
 		accountRole = "unknown"
 	}
+	autoReplyMode := session.AutoReplyMode
+	if autoReplyMode != "auto" && autoReplyMode != "manual" {
+		autoReplyMode = "auto"
+	}
 	return chatSessionDTO{
 		AccountID: session.AccountID, ChatID: session.ChatID, PeerUserID: session.PeerUserID,
-		PeerName: session.PeerName, PeerAvatar: session.PeerAvatar, AccountRole: accountRole, AutoReplyMode: session.AutoReplyMode,
+		PeerName: session.PeerName, PeerAvatar: session.PeerAvatar, AccountRole: accountRole, AutoReplyMode: autoReplyMode,
 		BuyerUserID: session.BuyerUserID, SellerUserID: session.SellerUserID, RoleItemID: session.RoleItemID, RoleSource: session.RoleSource, ItemID: session.ItemID,
 		ItemTitle: session.ItemTitle, ItemImageURL: session.ItemImageURL, LastMessage: session.LastMessage,
 		LastMessageAt: session.LastMessageAt, UnreadCount: session.UnreadCount,
