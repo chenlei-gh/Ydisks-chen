@@ -37,6 +37,10 @@ func (t *aiRetryTransport) RoundTrip(request *http.Request) (*http.Response, err
 	}
 	// delay 是按 Retry-After 或短退避策略计算的等待时间。
 	delay := aiRetryDelay(response)
+	// deadline 是原始 AI 请求的总时限；剩余时间不足时保留原响应，不再等待重试。
+	if deadline, hasDeadline := request.Context().Deadline(); hasDeadline && time.Until(deadline) <= delay {
+		return response, requestErr
+	}
 	if waitErr := waitForAIRetry(request.Context(), delay); waitErr != nil {
 		if response != nil && response.Body != nil {
 			_ = response.Body.Close()
@@ -113,7 +117,12 @@ func aiRetryDelayAt(value string, now time.Time) time.Duration {
 	if value == "" {
 		return fallbackDelay
 	}
-	if seconds, err := strconv.Atoi(value); err == nil && seconds >= 0 {
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil && seconds >= 0 {
+		// maxSeconds 防止异常大的 Retry-After 数值导致 duration 溢出。
+		const maxSeconds = int64((1<<63 - 1) / int64(time.Second))
+		if seconds > maxSeconds {
+			return time.Duration(1<<63 - 1)
+		}
 		return time.Duration(seconds) * time.Second
 	}
 	if retryAt, err := http.ParseTime(value); err == nil {
