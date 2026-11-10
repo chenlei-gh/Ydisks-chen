@@ -129,7 +129,6 @@ func (s *Server) listChatSessions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 type updateChatSessionReplyModeRequest struct {
 	AccountID string `json:"account_id"`
 	ChatID    string `json:"chat_id"`
