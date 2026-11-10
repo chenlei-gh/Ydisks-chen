@@ -22,6 +22,8 @@ import (
 type chatOutgoingRepository struct {
 	// service 保存聊天消息幂等写入和实时事件发布能力。
 	service *domainchat.Service
+	// store 仅用于把已确认的人工文本回复追加到 AI 会话历史。
+	store *db.Store
 }
 
 // NewChatSendingApplication 装配聊天历史、实时发送、图片上传和身份补全端口。
@@ -37,7 +39,7 @@ func NewChatSendingApplication(domainService *domainchat.Service, store *db.Stor
 	// service 是装配历史、发送、订阅、刷新和身份能力的聊天应用服务。
 	service := chatapp.NewWithSendingSubscriptionAndRefreshAndDownloader(
 		NewChatRepository(store),
-		NewChatOutgoingRepository(domainService),
+		NewChatOutgoingRepository(domainService, store),
 		NewChatSenderProvider(manager),
 		NewChatImageUploader(store, clientProvider, manager),
 		NewChatSubscriptionProvider(domainService),
@@ -84,8 +86,24 @@ func (reporter chatReadReporter) ReportRead(ctx context.Context, accountID, chat
 }
 
 // NewChatOutgoingRepository 创建聊天外发消息的领域适配器。
-func NewChatOutgoingRepository(service *domainchat.Service) chatapp.OutgoingRepository {
-	return chatOutgoingRepository{service: service}
+func NewChatOutgoingRepository(service *domainchat.Service, stores ...*db.Store) chatapp.OutgoingRepository {
+	var store *db.Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	return chatOutgoingRepository{service: service, store: store}
+}
+
+func (r chatOutgoingRepository) RecordManualAIContext(ctx context.Context, session chatapp.Session, text string) error {
+	if r.store == nil || r.store.AIReply == nil {
+		return chatapp.ErrUnavailable
+	}
+	if session.ItemID == "" || session.PeerUserID == "" || strings.TrimSpace(text) == "" {
+		return nil
+	}
+	return r.store.AIReply.AddConversation(ctx, session.AccountID, session.ChatID, session.PeerUserID, session.ItemID, db.AIConversationMessage{
+		Role: "assistant", Content: text, Intent: "manual_reply",
+	})
 }
 
 // CreateOutgoing 创建文字消息并转换为应用层非敏感模型。
