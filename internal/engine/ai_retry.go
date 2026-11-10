@@ -21,7 +21,14 @@ type aiRetryTransport struct {
 func (t *aiRetryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	// response、requestErr 保存首次传输得到的响应或网络错误。
 	response, requestErr := t.base.RoundTrip(request)
-	if request.Context().Err() != nil || !isRetryableAIResponse(response, requestErr) {
+	// contextErr 表示首次传输期间用户是否已取消或触发总请求 deadline。
+	if contextErr := request.Context().Err(); contextErr != nil {
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
+		return nil, contextErr
+	}
+	if !isRetryableAIResponse(response, requestErr) {
 		return response, requestErr
 	}
 	if response != nil && response.StatusCode == http.StatusTooManyRequests && isAIQuotaFailure(response) {
