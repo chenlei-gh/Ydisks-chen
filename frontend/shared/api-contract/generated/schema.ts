@@ -8893,34 +8893,65 @@ export interface operations {
                 "application/json": {
                     account_id: string;
                     chat_id: string;
+                    /** @enum {string} */
                     mode: "auto" | "manual";
                 };
             };
         };
         responses: {
+            /** @description 成功 */
             200: {
-                headers: { [name: string]: unknown; };
-                content: { "application/json": components["schemas"]["OperationResponse"]; };
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
             };
+            /** @description 统一错误响应 */
             400: {
-                headers: { [name: string]: unknown; };
-                content: { "application/json": components["schemas"]["ErrorResponse"]; };
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
+            /** @description 统一错误响应 */
             401: {
-                headers: { [name: string]: unknown; };
-                content: { "application/json": components["schemas"]["ErrorResponse"]; };
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
+            /** @description 会话不存在或无权访问 */
             404: {
-                headers: { [name: string]: unknown; };
-                content: { "application/json": components["schemas"]["ErrorResponse"]; };
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
+            /** @description 统一错误响应 */
             500: {
-                headers: { [name: string]: unknown; };
-                content: { "application/json": components["schemas"]["ErrorResponse"]; };
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
+            /** @description 统一错误响应 */
             503: {
-                headers: { [name: string]: unknown; };
-                content: { "application/json": components["schemas"]["ErrorResponse"]; };
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };
