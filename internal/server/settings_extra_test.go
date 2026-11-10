@@ -495,7 +495,7 @@ func TestAIReplySettingsAreUserScoped(t *testing.T) {
 
 	// setReq 用于本次流程后续判断的setReq
 	setReq := httptest.NewRequest(http.MethodPut, "/ai-reply-settings/other-acc", strings.NewReader(
-		`{"ai_enabled":true,"max_discount_percent":20,"max_discount_amount":200,"max_bargain_rounds":5,"custom_prompts":"override"}`,
+		`{"ai_enabled":true,"max_discount_percent":20,"max_discount_amount":200,"max_bargain_rounds":5,"max_completion_tokens":2048,"custom_prompts":"override"}`,
 	))
 	setReq.AddCookie(cookie)
 	// setRec 用于本次流程后续判断的setRec
