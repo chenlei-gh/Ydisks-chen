@@ -29,7 +29,18 @@ const (
 
 // newAIHTTPClient 用于本次流程后续判断的newAIHTTPClient
 var newAIHTTPClient = func(baseURL string) (*http.Client, error) {
-	return netguard.ConfiguredEndpointHTTPClient(baseURL, 30*time.Second)
+	// client 是先完成公网地址校验、再执行 AI 请求的受限 HTTP 客户端。
+	client, err := netguard.ConfiguredEndpointHTTPClient(baseURL, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	// baseTransport 保留 netguard 的 DNS/IP 约束，仅在其外层增加一次有限重试。
+	baseTransport := client.Transport
+	if baseTransport == nil {
+		baseTransport = http.DefaultTransport
+	}
+	client.Transport = &aiRetryTransport{base: baseTransport}
+	return client, nil
 }
 
 // AIReplierImpl AI 回复实现。
