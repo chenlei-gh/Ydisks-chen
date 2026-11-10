@@ -389,7 +389,7 @@ export const useItemActions = ({ selectedAccount, setSelectedAccount, setItems, 
       // lockName 基于账号和完整商品表单生成，确保不同标签页对同一商品竞争同一把锁。
       const lockName = getSinglePublishTabLockName(publishForm, publishLocation, publishCategory);
       // lockResult 只有在用户确认继续且前一个标签页释放锁后才会执行发布任务。
-      const lockResult = await runSinglePublishWithTabLock(lockName, executePublish, () =>
+      const lockResult = await runSinglePublishWithTabLock(lockName, executePublish, /* confirmDuplicateTab 冲突时询问用户是否排队继续。 */ () =>
         window.confirm('检测到另一个标签页正在发布相同商品。选择“确定”将在前一个发布操作结束后继续；选择“取消”则放弃本次发布。'),
       );
       if (lockResult.status === 'cancelled') alert('已取消本次发布，未发送发布请求。');
