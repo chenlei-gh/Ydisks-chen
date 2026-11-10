@@ -147,7 +147,14 @@ func (s *Server) updateChatSessionReplyMode(w http.ResponseWriter, r *http.Reque
 	input.AccountID = strings.TrimSpace(input.AccountID)
 	input.ChatID = strings.TrimSpace(input.ChatID)
 	input.Mode = strings.TrimSpace(input.Mode)
-	err := s.chatApplication().SetAutoReplyMode(r.Context(), session.UserID, input.AccountID, input.ChatID, input.Mode)
+	modePort, supported := s.chatApplication().(interface {
+		SetAutoReplyMode(context.Context, int64, string, string, string) error
+	})
+	if !supported {
+		writeErrCode(w, http.StatusServiceUnavailable, "chat_session_service_unavailable", "聊天会话服务未启用", "")
+		return
+	}
+	err := modePort.SetAutoReplyMode(r.Context(), session.UserID, input.AccountID, input.ChatID, input.Mode)
 	switch {
 	case err == nil:
 		writeJSON(w, http.StatusOK, operationResponse{Success: true})
