@@ -241,6 +241,7 @@ type ChatPort interface {
 	ListSessions(context.Context, int64, string, int) ([]chatapp.Session, error)
 	ListSessionPage(context.Context, int64, string, *chatapp.SessionCursor, int) (chatapp.SessionPage, error)
 	FindSession(context.Context, int64, string, string) (chatapp.Session, error)
+	SetAutoReplyMode(context.Context, int64, string, string, string) error
 	ResolveReadMessageID(context.Context, string, string, string) string
 	CleanupEmptySessions(context.Context, string) error
 	OwnsAccount(context.Context, int64, string) (bool, error)
