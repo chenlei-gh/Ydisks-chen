@@ -8908,7 +8908,7 @@ components:
         max_discount_percent: {type: integer}
         max_discount_amount: {type: integer}
         max_bargain_rounds: {type: integer}
-        max_completion_tokens: {type: integer, minimum: 0, description: '0 leaves the output limit to the model provider'}
+        max_completion_tokens: {type: integer, minimum: 0}
         custom_prompts: {type: string}
         ai_mode: {type: string, enum: [bargain_only, full_service]}
     AIReplySettingsUpdateRequest:
