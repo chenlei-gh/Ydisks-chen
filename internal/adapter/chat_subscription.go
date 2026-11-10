@@ -13,20 +13,14 @@ import (
 type chatSubscriptionProvider struct {
 	// service 保存聊天领域事件中心；HTTP 层只接收应用层事件。
 	service *domainchat.Service
-	// store 用于补齐事件会话的持久化人工接管模式；只查询当前订阅用户可见的会话。
-	store *db.Store
 }
 
 // NewChatSubscriptionProvider 创建实时聊天订阅适配器。
-func NewChatSubscriptionProvider(service *domainchat.Service, stores ...*db.Store) chatapp.SubscriptionProvider {
+func NewChatSubscriptionProvider(service *domainchat.Service) chatapp.SubscriptionProvider {
 	if service == nil {
 		return nil
 	}
-	var store *db.Store
-	if len(stores) > 0 {
-		store = stores[0]
-	}
-	return chatSubscriptionProvider{service: service, store: store}
+	return chatSubscriptionProvider{service: service}
 }
 
 // Subscribe 转发指定用户有权接收的领域事件，并由取消函数负责释放领域订阅和转发协程。
@@ -73,15 +67,6 @@ func (p chatSubscriptionProvider) Subscribe(ctx context.Context, userID int64) (
 				}
 				// converted 保存转换后的应用层事件，避免领域数据库模型越过适配器。
 				converted := chatApplicationEvent(event)
-				if event.Session != nil && converted.Session != nil && p.store != nil && p.store.Chats != nil {
-					// persisted 保存当前用户可见会话的权威模式；读取失败时省略会话摘要，避免把 manual 误报为 auto。
-					persisted, lookupErr := p.store.Chats.FindSession(forwardCtx, userID, event.Session.CookieID, event.Session.ChatID)
-					if lookupErr != nil {
-						converted.Session = nil
-					} else {
-						converted.Session.AutoReplyMode = persisted.AutoReplyMode
-					}
-				}
 				select {
 				case output <- converted:
 				case <-forwardCtx.Done():
