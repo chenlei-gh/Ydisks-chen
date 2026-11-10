@@ -291,7 +291,7 @@ func TestMultiDBKeywordExpressionsMigration(t *testing.T) {
 			}
 			// finalVersion、finalVersionErr 保存重新升级后的最新迁移版本及读取错误。
 			finalVersion, finalVersionErr := goose.GetDBVersion(target.store.DB)
-			if finalVersionErr != nil || finalVersion != 60 {
+			if finalVersionErr != nil || finalVersion != 61 {
 				t.Fatalf("final migration version=%d err=%v", finalVersion, finalVersionErr)
 			}
 		})
