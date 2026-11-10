@@ -4,9 +4,10 @@ import type { PublishItemForm } from './itemActions';
 
 // PublishLockManager 只描述本功能需要的 Web Locks 最小接口，便于测试并避免引入额外依赖。
 export interface PublishLockManager {
+  // request 负责在指定名称下申请并持有浏览器互斥锁。
   request<T>(
     name: string,
-    options: { mode: 'exclusive'; ifAvailable?: boolean },
+    options: { /** mode 固定为互斥锁。 */ mode: 'exclusive'; /** ifAvailable 为 true 时只探测、不排队。 */ ifAvailable?: boolean },
     callback: (lock: Lock | null) => Promise<T>,
   ): Promise<T>;
 }
@@ -19,9 +20,9 @@ export const getSinglePublishTabLockName = (
 ): string => {
   // imageEntries 保存主图和规格图片的用途及浏览器可见元数据。
   const imageEntries = [
-    ...(form.images ?? []).map(image => ({ role: 'item', file: image })),
-    ...(form.specs ?? []).flatMap(spec => (spec.values ?? []).flatMap(value =>
-      value.image ? [{ role: spec.specId + ':' + value.valueId, file: value.image }] : [],
+    ...(form.images ?? []).map(/* imageFile 是一张商品主图。 */ imageFile => ({ role: 'item', file: imageFile })), 
+    ...(form.specs ?? []).flatMap(/* spec 是一个商品规格维度。 */ spec => (spec.values ?? []).flatMap(/* specValue 是当前规格的一个取值。 */ specValue =>
+      specValue.image ? [{ role: spec.specId + ':' + specValue.valueId, file: specValue.image }] : [],
     )),
   ];
   // canonical 是参与锁指纹的商品发布字段，不包含图片二进制和账号 Cookie 内容。
@@ -34,16 +35,16 @@ export const getSinglePublishTabLockName = (
     quantity: form.quantity,
     postage_mode: form.postage_mode,
     postage: form.postage,
-    specs: (form.specs ?? []).map(spec => ({
+    specs: (form.specs ?? []).map(/* spec 是用于锁指纹的规格维度。 */ spec => ({
       specId: spec.specId,
       name: spec.name,
       supportImage: spec.supportImage,
-      values: (spec.values ?? []).map(value => ({ valueId: value.valueId, value: value.value })),
+      values: (spec.values ?? []).map(/* specValue 是用于锁指纹的规格值。 */ specValue => ({ valueId: specValue.valueId, value: specValue.value })),
     })),
     skuRows: form.skuRows ?? [],
     location,
     category,
-    imageEntries: imageEntries.map(entry => ({
+    imageEntries: imageEntries.map(/* entry 是一张带用途标识的图片。 */ entry => ({
       role: entry.role,
       name: entry.file.name,
       type: entry.file.type,
@@ -54,7 +55,7 @@ export const getSinglePublishTabLockName = (
   // hashA 和 hashB 是用于浏览器锁名的两组非密码学短哈希状态。
   let hashA = 2166136261;
   let hashB = 5381;
-  for (const byte of new TextEncoder().encode(canonical)) {
+  for (const /* byte 是规范化表单编码后的单个字节。 */ byte of new TextEncoder().encode(canonical)) {
     hashA = Math.imul(hashA ^ byte, 16777619);
     hashB = Math.imul(hashB, 33) ^ byte;
   }
@@ -68,7 +69,7 @@ export const runSinglePublishWithTabLock = async <T>(
   task: () => Promise<T>,
   confirmConflict: () => boolean,
   lockManager?: PublishLockManager,
-): Promise<{ status: 'completed'; value: T } | { status: 'cancelled' }> => {
+): Promise<{ /** status 表示任务完成。 */ status: 'completed'; /** value 是发布任务的返回值。 */ value: T } | { /** status 表示用户取消发布。 */ status: 'cancelled' }> => {
   // manager 是当前浏览器提供的 Web Locks 实现；服务端仍负责操作 ID 幂等。
   const manager = lockManager ?? (typeof navigator !== 'undefined' && 'locks' in navigator
     ? navigator.locks
@@ -79,7 +80,7 @@ export const runSinglePublishWithTabLock = async <T>(
   let acquired = false;
   // result 保存在首次取得锁时执行任务的结果。
   let result!: T;
-  await manager.request(lockName, { mode: 'exclusive', ifAvailable: true }, async lock => {
+  await manager.request(lockName, { mode: 'exclusive', ifAvailable: true }, /* firstLockCallback 在不等待的首次探测中处理锁结果。 */ async lock => {
     if (!lock) return;
     acquired = true;
     result = await task();
@@ -88,7 +89,7 @@ export const runSinglePublishWithTabLock = async <T>(
   if (!confirmConflict()) return { status: 'cancelled' };
 
   // 用户选择继续后排队等待原标签页释放锁，再在锁内执行，绝不无锁并行。
-  result = await manager.request(lockName, { mode: 'exclusive' }, async lock => {
+  result = await manager.request(lockName, { mode: 'exclusive' }, /* queuedLockCallback 在用户确认后等待并持有锁。 */ async lock => {
     if (!lock) throw new Error('无法取得商品发布协调锁，请稍后重试。');
     return task();
   });
