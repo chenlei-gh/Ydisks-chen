@@ -78,6 +78,8 @@ type Session struct {
 	PeerAvatar string
 	// AccountRole 是当前账号在 RoleItemID 对应商品会话中的角色。
 	AccountRole string
+	// AutoReplyMode 是当前会话的自动回复模式，auto 表示自动回复，manual 表示人工接管。
+	AutoReplyMode string
 	// BuyerUserID 是已确认的买家平台标识；角色未知时为空。
 	BuyerUserID string
 	// SellerUserID 是已确认的卖家平台标识；角色未知时为空。
@@ -218,6 +220,13 @@ type SessionRepository interface {
 	ExistsOwned(ctx context.Context, userID int64, accountID string) (bool, error)
 	// MarkRead 将指定用户拥有的会话未读数归零。
 	MarkRead(ctx context.Context, userID int64, accountID, chatID string) error
+}
+
+
+// SessionReplyModeRepository 定义会话级自动回复模式的持久化切换能力。
+type SessionReplyModeRepository interface {
+	// SetAutoReplyMode 只允许当前用户切换其拥有的可见会话。
+	SetAutoReplyMode(ctx context.Context, userID int64, accountID, chatID, mode string) error
 }
 
 // SessionDeletionRepository 定义用户删除会话所需的最小归属与原子清空能力。
@@ -516,6 +525,24 @@ func (s *Service) MarkRead(ctx context.Context, userID int64, accountID, chatID 
 		return ErrSessionUnavailable
 	}
 	return repository.MarkRead(ctx, userID, accountID, chatID)
+}
+
+
+// SetAutoReplyMode 切换指定会话的自动回复模式；数据库层以条件 UPDATE 与自动回复 claim 竞争。
+func (s *Service) SetAutoReplyMode(ctx context.Context, userID int64, accountID, chatID, mode string) error {
+	accountID, chatID = strings.TrimSpace(accountID), strings.TrimSpace(chatID)
+	if s == nil || s.repository == nil || userID <= 0 || accountID == "" || chatID == "" || (mode != "auto" && mode != "manual") {
+		return ErrInvalidInput
+	}
+	repository, ok := s.repository.(SessionReplyModeRepository)
+	if !ok {
+		return ErrSessionUnavailable
+	}
+	err := repository.SetAutoReplyMode(ctx, userID, accountID, chatID, mode)
+	if errors.Is(err, ErrChatSessionNotFound) {
+		return ErrChatSessionNotFound
+	}
+	return err
 }
 
 // DeleteConversation 隐藏当前用户拥有的会话并物理清空聊天页消息，保留自动化定位和独立 AI 记忆。
