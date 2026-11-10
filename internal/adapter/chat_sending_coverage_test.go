@@ -10,8 +10,8 @@ import (
 	accountmanager "xianyu-go/internal/account"
 	chatapp "xianyu-go/internal/application/chat"
 	"xianyu-go/internal/automation"
-	"xianyu-go/internal/db"
 	domainchat "xianyu-go/internal/chat"
+	"xianyu-go/internal/db"
 	"xianyu-go/internal/xianyu/cookierefresh"
 	"xianyu-go/internal/xianyu/mtop"
 )
