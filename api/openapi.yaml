@@ -9878,7 +9878,7 @@ components:
           - type: boolean
     ChatSession:
       type: object
-      required: [account_id, chat_id, peer_user_id, peer_name, account_role, auto_reply_mode, buyer_user_id, seller_user_id, role_item_id, role_source, last_message, last_message_at, unread_count]
+      required: [account_id, chat_id, peer_user_id, peer_name, account_role, buyer_user_id, seller_user_id, role_item_id, role_source, last_message, last_message_at, unread_count]
       properties:
         account_id: {type: string}
         chat_id: {type: string}
