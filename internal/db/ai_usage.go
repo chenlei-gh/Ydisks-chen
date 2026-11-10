@@ -10,16 +10,16 @@ import (
 
 // AIUsageRecord 是一次 AI 模型请求的用量摘要，不包含提示词、响应正文或凭证。
 type AIUsageRecord struct {
-	CookieID        string
-	Provider        string
-	Model           string
-	TaskType        string
-	PromptTokens    int
+	CookieID         string
+	Provider         string
+	Model            string
+	TaskType         string
+	PromptTokens     int
 	CompletionTokens int
-	TotalTokens     int
-	DurationMS      int64
-	Status          string
-	ErrorKind       string
+	TotalTokens      int
+	DurationMS       int64
+	Status           string
+	ErrorKind        string
 }
 
 // AIUsageDailySummary 是用户在某日、某模型和任务类型下的聚合用量。
