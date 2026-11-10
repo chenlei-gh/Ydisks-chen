@@ -656,7 +656,7 @@ func (s *ChatStore) FindSession(ctx context.Context, userID int64, cookieID, cha
 	// err 是带账号归属条件的单行查询结果。
 	err := s.DB.QueryRowContext(ctx, `SELECT cs.cookie_id,cs.chat_id,cs.buyer_id,cs.buyer_name,cs.buyer_avatar_url,
 		cs.item_id,cs.item_title,cs.item_image_url,cs.last_message,cs.last_message_at,cs.unread_count,
-		cs.account_role,cs.buyer_user_id,cs.seller_user_id,cs.role_item_id,cs.role_source
+		cs.account_role,cs.buyer_user_id,cs.seller_user_id,cs.role_item_id,cs.role_source,cs.auto_reply_mode
 		FROM chat_sessions cs JOIN cookies c ON c.id=cs.cookie_id
 		WHERE c.user_id=? AND cs.cookie_id=? AND cs.chat_id=? AND cs.is_visible=? AND cs.user_hidden_at=0`, userID, cookieID, chatID, true).
 		Scan(&session.CookieID, &session.ChatID, &session.BuyerID, &session.BuyerName, &session.BuyerAvatar,
@@ -705,7 +705,7 @@ func (s *ChatStore) ListSessionPage(ctx context.Context, userID int64, cookieID 
 		// scanErr 保存当前数据库行映射到会话摘要时的错误。
 		if scanErr := rows.Scan(&session.CookieID, &session.ChatID, &session.BuyerID, &session.BuyerName, &session.BuyerAvatar,
 			&session.ItemID, &session.ItemTitle, &session.ItemImageURL, &session.LastMessage, &session.LastMessageAt, &session.UnreadCount,
-			&session.AccountRole, &session.BuyerUserID, &session.SellerUserID, &session.RoleItemID, &session.RoleSource); scanErr != nil {
+			&session.AccountRole, &session.BuyerUserID, &session.SellerUserID, &session.RoleItemID, &session.RoleSource, &session.AutoReplyMode); scanErr != nil {
 			return ChatSessionPage{}, scanErr
 		}
 		sessions = append(sessions, session)
