@@ -680,7 +680,7 @@ func (s *ChatStore) ListSessionPage(ctx context.Context, userID int64, cookieID 
 	// query 保存归属过滤、可选键集条件和稳定排序共同构成的会话分页 SQL。
 	query := `SELECT cs.cookie_id,cs.chat_id,cs.buyer_id,cs.buyer_name,cs.buyer_avatar_url,
 		cs.item_id,cs.item_title,cs.item_image_url,cs.last_message,cs.last_message_at,cs.unread_count,
-		cs.account_role,cs.buyer_user_id,cs.seller_user_id,cs.role_item_id,cs.role_source
+		cs.account_role,cs.buyer_user_id,cs.seller_user_id,cs.role_item_id,cs.role_source,cs.auto_reply_mode
 		FROM chat_sessions cs JOIN cookies c ON c.id=cs.cookie_id
 		WHERE c.user_id=? AND cs.cookie_id=? AND cs.is_visible=? AND cs.user_hidden_at=0`
 	// args 保存与会话分页 SQL 占位符严格对应的非敏感查询参数。
