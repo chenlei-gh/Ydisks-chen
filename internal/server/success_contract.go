@@ -73,7 +73,7 @@ type chatSessionDTO struct {
 	// AccountRole 是当前账号在角色商品中的 seller、buyer 或 unknown。
 	AccountRole string `json:"account_role"`
 	// AutoReplyMode 是当前会话的自动回复模式。
-	AutoReplyMode string `json:"auto_reply_mode"`
+	AutoReplyMode string `json:"auto_reply_mode,omitempty"`
 	// BuyerUserID 是已确认的买家平台标识。
 	BuyerUserID string `json:"buyer_user_id"`
 	// SellerUserID 是已确认的卖家平台标识。
@@ -103,13 +103,9 @@ func newChatSessionDTOFromApplication(session chatapp.Session) chatSessionDTO {
 	if accountRole != "seller" && accountRole != "buyer" {
 		accountRole = "unknown"
 	}
-	autoReplyMode := session.AutoReplyMode
-	if autoReplyMode != "auto" && autoReplyMode != "manual" {
-		autoReplyMode = "auto"
-	}
 	return chatSessionDTO{
 		AccountID: session.AccountID, ChatID: session.ChatID, PeerUserID: session.PeerUserID,
-		PeerName: session.PeerName, PeerAvatar: session.PeerAvatar, AccountRole: accountRole, AutoReplyMode: autoReplyMode,
+		PeerName: session.PeerName, PeerAvatar: session.PeerAvatar, AccountRole: accountRole, AutoReplyMode: session.AutoReplyMode,
 		BuyerUserID: session.BuyerUserID, SellerUserID: session.SellerUserID, RoleItemID: session.RoleItemID, RoleSource: session.RoleSource, ItemID: session.ItemID,
 		ItemTitle: session.ItemTitle, ItemImageURL: session.ItemImageURL, LastMessage: session.LastMessage,
 		LastMessageAt: session.LastMessageAt, UnreadCount: session.UnreadCount,
