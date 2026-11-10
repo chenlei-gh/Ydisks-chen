@@ -107,7 +107,7 @@
 - [ ] 3.2 对照以下语义检查现有模型是否表达充分：`not_started`、`started`、`remote_confirmed`、`local_confirmed`、`unknown`。
 - [ ] 3.3 只有当多个业务域确实存在重复且不一致的状态处理时，才考虑提取共享协调能力；优先复用现有 DB / application 层，不为抽象而抽象。
 - [ ] 3.4 明确 lease token、attempt/generation、过期接管和旧 worker fencing 的责任边界。
-- [ ] 3.5 为状态迁移、重复回调、超时和本地提交失败建立表驱动测试。
+- [x] 3.5 为状态迁移、重复回调、超时和本地提交失败建立回归测试（已有重复 WS 事件入口处理测试，见下方 2026-11-10 补充证据；PR #9/#13/#16 的超时、checkpoint 持久化失败与租约接管测试及 CI 证据已记录）。
 
 **验收标准**：每个状态都有明确进入条件、允许的后继状态、恢复策略和可验证持久化证据；不引入无法证明必要性的新服务层。
 
@@ -316,6 +316,15 @@
 - **4.6 完成（自动化测试范围）**：批量部分成功/计数与失败行重置、worker claim 互斥和租约接管、未知远端结果隔离、超时及远端成功后 checkpoint 写入失败均有回归测试。PR #8 run [42546788164](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42546788164) 的 Go/React/多数据库/冒烟 4/4 通过；PR #13 run [42624548385](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42624548385) 通过。故障注入主要基于 SQLite；PR #7/#9 的多数据库结果另行记录，不将其扩大解释为批量全路径三方言验证。
 - **边界**：上述结论只覆盖本地自动化测试与 CI，不代表真实闲鱼商品发布、图片上传或远端幂等行为已验证；真实账号/订单 E2E 继续暂停。
 
+
+### 2026-11-10 阶段 3.5 重复 WS 事件覆盖复核
+
+- **复核结论：3.5 已有覆盖，不新增重复测试**。此前待办记录把“未找到专门重复平台回调测试”误判为缺口；本次直接检查主分支 internal/automation/center_test.go，发现两项现有测试：
+  - TestCenterOrderPaidFetchesOrderDetailMatchesSpecAndQuantity：同一订单付款 WS 任务第一次执行发出 4 条卡密消息，随后对同一任务再次调用 Center.HandleTask，断言发送数仍为 4。
+  - TestCenterOrderPaidSendsCardBeforeConfirmShipment：从新版 WS 付款卡片原始报文调用 ExtractTaskFromWS 得到任务，重复投递两次，断言卡密发送和平台确认发货各只发生一次。
+- **覆盖边界**：这两项是自动化中心入口层的重复 WS 事件回归，结合既有操作状态、远端超时、checkpoint 持久化失败和 worker 租约接管测试，满足 3.5 本地自动化测试范围。它们使用测试发送器/HTTP 模拟平台，不代表闲鱼真实账号平台 E2E。
+- **CI 证据**：上述测试位于主分支基线代码；PR #15 run [42723693579](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42723693579) 与 PR #18 run [42759850663](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42759850663) 的 Go job 均通过完整 Go 测试，因而包含并通过这些用例。
+- **结论**：3.5 标记完成；不重复编写相同测试。3.1–3.4 仍按清单分别审计，不因 3.5 完成而自动勾选。
 
 ### 2026-11-10 待办清单更新与继续执行记录
 
