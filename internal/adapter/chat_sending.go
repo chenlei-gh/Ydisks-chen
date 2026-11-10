@@ -122,7 +122,7 @@ func (r chatOutgoingRepository) SetOutgoingStatus(ctx context.Context, accountID
 func dbChatSession(session chatapp.Session) db.ChatSession {
 	return db.ChatSession{
 		CookieID: session.AccountID, ChatID: session.ChatID, BuyerID: session.PeerUserID,
-		BuyerName: session.PeerName, BuyerAvatar: session.PeerAvatar, AccountRole: session.AccountRole, BuyerUserID: session.BuyerUserID, SellerUserID: session.SellerUserID, RoleItemID: session.RoleItemID, RoleSource: session.RoleSource, ItemID: session.ItemID,
+		BuyerName: session.PeerName, BuyerAvatar: session.PeerAvatar, AccountRole: session.AccountRole, BuyerUserID: session.BuyerUserID, SellerUserID: session.SellerUserID, RoleItemID: session.RoleItemID, RoleSource: session.RoleSource, AutoReplyMode: session.AutoReplyMode, ItemID: session.ItemID,
 		ItemTitle: session.ItemTitle, ItemImageURL: session.ItemImageURL, LastMessage: session.LastMessage, LastMessageAt: session.LastMessageAt,
 		UnreadCount: session.UnreadCount,
 	}
