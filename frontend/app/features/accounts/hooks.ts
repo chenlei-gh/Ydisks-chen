@@ -29,6 +29,7 @@ export const mergeAccountAISettings = (
     max_discount_percent: allAISettings[account.id]?.max_discount_percent ?? 10,
     max_discount_amount: allAISettings[account.id]?.max_discount_amount ?? 100,
     max_bargain_rounds: allAISettings[account.id]?.max_bargain_rounds ?? 3,
+    max_completion_tokens: allAISettings[account.id]?.max_completion_tokens ?? 0,
     custom_prompts: allAISettings[account.id]?.custom_prompts ?? '',
   }),
 );
