@@ -272,3 +272,41 @@ func TestParsePrice(t *testing.T) {
 		}
 	}
 }
+
+// TestReplyServiceManualHandoffBlocksDelivery 验证人工接管会在统一最终投递闸门阻止自动回复，恢复后重新允许投递。
+func TestReplyServiceManualHandoffBlocksDelivery(t *testing.T) {
+	store, cleanup := newReplyStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	admin, err := store.Users.GetByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := db.ChatSession{CookieID: "cid", ChatID: "manual-handoff-chat", BuyerID: "buyer1"}
+	if err := store.Chats.UpsertSession(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Chats.SetAutoReplyMode(ctx, admin.ID, "cid", session.ChatID, "manual"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB.ExecContext(ctx, `INSERT INTO default_replies (cookie_id,enabled,reply_content,reply_once) VALUES ('cid',1,'自动回复内容',0)`); err != nil {
+		t.Fatal(err)
+	}
+	sender := &recordingSender{}
+	service := NewReplyService("cid", store, sender, nil, nil, nil)
+	if err := service.Handle(ctx, chatMsg("你好", "item1", session.ChatID)); err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.texts) != 0 {
+		t.Fatalf("manual handoff must block automatic delivery, got %+v", sender.texts)
+	}
+	if err := store.Chats.SetAutoReplyMode(ctx, admin.ID, "cid", session.ChatID, "auto"); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Handle(ctx, chatMsg("你好", "item1", session.ChatID)); err != nil {
+		t.Fatal(err)
+	}
+	if len(sender.texts) != 1 || sender.texts[0].text != "自动回复内容" {
+		t.Fatalf("automatic delivery should resume after handoff, got %+v", sender.texts)
+	}
+}
