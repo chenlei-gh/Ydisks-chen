@@ -212,11 +212,13 @@ func (s *ChatStore) ClaimAutoReply(ctx context.Context, cookieID, chatID string)
 	if s == nil || s.DB == nil || strings.TrimSpace(cookieID) == "" || strings.TrimSpace(chatID) == "" {
 		return false, errors.New("会话自动回复 claim 参数无效")
 	}
+	// result 和 err 保存自动回复条件 claim 的原子更新结果。
 	result, err := s.DB.ExecContext(ctx, `UPDATE chat_sessions SET reply_gate_version=reply_gate_version+1
 		WHERE cookie_id=? AND chat_id=? AND auto_reply_mode='auto'`, cookieID, chatID)
 	if err != nil {
 		return false, err
 	}
+	// affected 和 err 用于确认自动回复 claim 是否成功提交。
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return false, err
