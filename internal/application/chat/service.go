@@ -222,7 +222,6 @@ type SessionRepository interface {
 	MarkRead(ctx context.Context, userID int64, accountID, chatID string) error
 }
 
-
 // SessionReplyModeRepository 定义会话级自动回复模式的持久化切换能力。
 type SessionReplyModeRepository interface {
 	// SetAutoReplyMode 只允许当前用户切换其拥有的可见会话。
