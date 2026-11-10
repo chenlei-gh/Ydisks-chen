@@ -17,6 +17,10 @@ type sendRepository struct {
 	message Message
 	// statuses 保存按调用顺序写入的消息状态。
 	statuses []string
+	// manualRecords 保存已确认发送后追加到 AI 上下文的人工回复。
+	manualRecords []string
+	// manualRecordErr 模拟 AI 上下文记录失败。
+	manualRecordErr error
 }
 
 // CreateOutgoing 创建测试文字消息。
@@ -45,6 +49,11 @@ func (r *sendRepository) SetOutgoingStatus(_ context.Context, _, _ string, statu
 	}
 	r.message.Status = status
 	return r.message, nil
+}
+
+func (r *sendRepository) RecordManualAIContext(_ context.Context, _ Session, text string) error {
+	r.manualRecords = append(r.manualRecords, text)
+	return r.manualRecordErr
 }
 
 // sendProvider 是按账号返回固定发送器的测试替身。
@@ -150,6 +159,47 @@ func TestSendTextSuccessPreservesIdempotencyKey(t *testing.T) {
 	}
 	if len(repository.statuses) != 1 || repository.statuses[0] != "sent" {
 		t.Fatalf("statuses=%v", repository.statuses)
+	}
+}
+
+func TestSendTextRecordsConfirmedManualReplyInAIContext(t *testing.T) {
+	repository, sender := &sendRepository{}, &sendSender{}
+	service := NewWithSending(nil, repository, sendProvider{sender: sender}, nil)
+	message, err := service.SendText(context.Background(), OutgoingInput{Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1", ItemID: "item-1"}, Text: "人工补充说明"})
+	if err != nil || message == nil || message.Status != "sent" {
+		t.Fatalf("message=%+v err=%v", message, err)
+	}
+	if len(repository.manualRecords) != 1 || repository.manualRecords[0] != "人工补充说明" {
+		t.Fatalf("manual AI context records=%v", repository.manualRecords)
+	}
+}
+
+func TestSendTextDoesNotRecordUnconfirmedManualReply(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{name: "definite failure", err: errors.New("remote rejected")},
+		{name: "uncertain", err: ErrSendUncertain},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repository, sender := &sendRepository{}, &sendSender{sendErr: tc.err}
+			service := NewWithSending(nil, repository, sendProvider{sender: sender}, nil)
+			_, err := service.SendText(context.Background(), OutgoingInput{Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1", ItemID: "item-1"}, Text: "未确认消息"})
+			if err == nil || len(repository.manualRecords) != 0 {
+				t.Fatalf("err=%v manual records=%v", err, repository.manualRecords)
+			}
+		})
+	}
+}
+
+func TestManualContextRecordFailureDoesNotRetrySuccessfulSend(t *testing.T) {
+	repository, sender := &sendRepository{manualRecordErr: errors.New("context store unavailable")}, &sendSender{}
+	service := NewWithSending(nil, repository, sendProvider{sender: sender}, nil)
+	message, err := service.SendText(context.Background(), OutgoingInput{Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1", ItemID: "item-1"}, Text: "已发送"})
+	if err != nil || message == nil || message.Status != "sent" || len(repository.statuses) != 1 || repository.statuses[0] != "sent" {
+		t.Fatalf("message=%+v err=%v statuses=%v", message, err, repository.statuses)
 	}
 }
 
@@ -355,6 +405,9 @@ func TestSendReplyUsesTheMessagePageImagePipeline(t *testing.T) {
 	})
 	if sendErr != nil || result == nil || !result.ImageSent || !result.TextSent || result.Image == nil || result.Text == nil {
 		t.Fatalf("result=%+v err=%v", result, sendErr)
+	}
+	if len(repository.manualRecords) != 0 {
+		t.Fatalf("automatic reply must not be recorded as manual context: %v", repository.manualRecords)
 	}
 	if sender.imageWidth != 1600 || sender.imageHeight != 900 || strings.Join(sender.calls, ",") != "image,text" {
 		t.Fatalf("统一发送顺序或尺寸错误 calls=%v size=%dx%d", sender.calls, sender.imageWidth, sender.imageHeight)
