@@ -184,8 +184,9 @@ func (a *AIReplierImpl) requestAICompletion(ctx context.Context, m ChatMessage, 
 	if aiCfg.BaseURL != "" {
 		clientCfg.BaseURL = aiCfg.BaseURL
 	}
-	// err 是创建受限模型 HTTP 客户端时返回的地址或配置错误。
-	clientCfg.HTTPClient, err := newAIHTTPClient(clientCfg.BaseURL)
+	// err 是创建受限模型 HTTP 客户端或执行模型请求时返回的错误。
+	var err error
+	clientCfg.HTTPClient, err = newAIHTTPClient(clientCfg.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("AI API 地址无效: %w", err)
 	}
