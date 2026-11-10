@@ -54,6 +54,7 @@ export const getSinglePublishTabLockName = (
   });
   // hashA 和 hashB 是用于浏览器锁名的两组非密码学短哈希状态。
   let hashA = 2166136261;
+  // hashB 是第二组独立的 32 位非密码学哈希状态。
   let hashB = 5381;
   for (const /* byte 是规范化表单编码后的单个字节。 */ byte of new TextEncoder().encode(canonical)) {
     hashA = Math.imul(hashA ^ byte, 16777619);
