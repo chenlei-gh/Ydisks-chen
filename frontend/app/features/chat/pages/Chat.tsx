@@ -49,7 +49,9 @@ const Chat: React.FC<ChatProps> = ({ libraryImageChooser: LibraryChooser }) => {
   const [itemPickerOpen, setItemPickerOpen] = React.useState(false);
 	// deleteTarget 保存等待用户确认清空的会话，空值表示确认框关闭。
 	const [deleteTarget, setDeleteTarget] = React.useState<ChatSession | null>(null);
+	// replyModeUpdating 表示当前会话的人工接管模式切换请求是否正在提交。
 	const [replyModeUpdating, setReplyModeUpdating] = React.useState(false);
+	// replyModeError 保存模式切换或会话状态刷新失败时需要展示的错误。
 	const [replyModeError, setReplyModeError] = React.useState('');
 
   React.useEffect(/* 当前副作用在账号或会话变化时关闭旧上下文中的商品弹窗。 */ () => {
@@ -76,15 +78,16 @@ const Chat: React.FC<ChatProps> = ({ libraryImageChooser: LibraryChooser }) => {
 
 
 	/** 在当前会话的人工接管与自动回复模式之间切换；后端提交后刷新会话状态。 */
-	const toggleReplyMode = React.useCallback(async (): Promise<void> => {
+	const toggleReplyMode = React.useCallback(/* 当前回调提交会话模式变更并刷新持久化状态。 */ async (): Promise<void> => {
 		if (!selectedSession || replyModeUpdating) return;
+		// nextMode 是本次按钮操作准备提交的目标会话模式。
 		const nextMode = selectedSession.auto_reply_mode === 'manual' ? 'auto' : 'manual';
 		setReplyModeUpdating(true);
 		setReplyModeError('');
 		try {
 			await updateChatSessionReplyMode(selectedSession.account_id, selectedSession.chat_id, nextMode);
 			await reloadSessions(activeAccountID);
-		} catch (error) {
+		} catch (/* error 保存本次模式切换或状态刷新失败的原因。 */ error) {
 			setReplyModeError(error instanceof Error ? error.message : '切换会话自动回复模式失败');
 		} finally {
 			setReplyModeUpdating(false);
