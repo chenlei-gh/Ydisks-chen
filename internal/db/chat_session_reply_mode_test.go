@@ -107,21 +107,17 @@ func TestMultiDBChatSessionReplyModeClaimRace(t *testing.T) {
 
 			// start 同时释放两个操作，制造模式切换与 claim 的真实竞争。
 			start := make(chan struct{})
-			// claimResult 接收自动回复 claim 的结果与错误。
-			claimResult := make(chan struct {
-				claimed bool
-				err     error
-			}, 1)
+			// claimResults 和 claimErrors 分别接收自动回复 claim 的布尔结果与错误。
+			claimResults := make(chan bool, 1)
+			claimErrors := make(chan error, 1)
 			// modeResult 接收人工接管更新的错误。
 			modeResult := make(chan error, 1)
 			go func() {
 				<-start
 				// claimed 和 claimErr 描述本次并发自动回复 claim 的提交结果。
 				claimed, claimErr := target.store.Chats.ClaimAutoReply(ctx, accountID, session.ChatID)
-				claimResult <- struct {
-					claimed bool
-					err     error
-				}{claimed: claimed, err: claimErr}
+				claimResults <- claimed
+				claimErrors <- claimErr
 			}()
 			go func() {
 				<-start
@@ -130,10 +126,12 @@ func TestMultiDBChatSessionReplyModeClaimRace(t *testing.T) {
 			}()
 			close(start)
 
-			// claim 保存并发自动回复操作的最终结果。
-			claim := <-claimResult
-			if claim.err != nil {
-				t.Fatalf("claim during mode race: %v", claim.err)
+			// claimWon 保存并发自动回复操作是否先于人工接管提交。
+			claimWon := <-claimResults
+			// claimErr 保存并发自动回复 claim 的最终错误。
+			claimErr := <-claimErrors
+			if claimErr != nil {
+				t.Fatalf("claim during mode race: %v", claimErr)
 			}
 			// modeErr 保存并发人工接管操作的最终结果。
 			if modeErr := <-modeResult; modeErr != nil {
@@ -145,9 +143,9 @@ func TestMultiDBChatSessionReplyModeClaimRace(t *testing.T) {
 				t.Fatalf("find session after mode race: %v", err)
 			}
 			if stored.AutoReplyMode != "manual" {
-				t.Fatalf("final mode=%q, want manual (claim won race: %v)", stored.AutoReplyMode, claim.claimed)
+				t.Fatalf("final mode=%q, want manual (claim won race: %v)", stored.AutoReplyMode, claimWon)
 			}
-			// claim.claimed 为 true 表示 claim 先提交、该回复可完成；false 表示人工接管先提交并阻止回复。
+			// claimWon 为 true 表示 claim 先提交、该回复可完成；false 表示人工接管先提交并阻止回复。
 		})
 	}
 }
