@@ -106,6 +106,7 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 	if err != nil {
 		return nil, fmt.Errorf("读取 AI 对话历史失败: %w", err)
 	}
+	history = boundAIConversationHistory(history, m.Text)
 	if isBargain {
 		bargainCount++
 	}
@@ -144,7 +145,7 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 		}
 		messages = append(messages, openai.ChatCompletionMessage{Role: role, Content: truncateAIContent(message.Content)})
 	}
-	messages = append(messages, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: m.Text})
+	messages = append(messages, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: truncateAIContent(m.Text)})
 
 	// aiCtx、cancel 用于本次流程后续判断的人工智能Ctx、cancel
 	aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -507,10 +508,45 @@ func unsafeOfferedPrice(reply string, minimum float64) (float64, bool) {
 	return 0, false
 }
 
+const (
+	aiContextMaxMessages = 10
+	aiContextMaxRunes    = 8000
+	aiMessageMaxRunes    = 2000
+)
+
+// boundAIConversationHistory 按最近消息优先限制历史条数和“历史+当前买家消息”的总字符量。
+// 这里使用 rune 上限而非供应商 tokenizer，避免把跨模型估算误称为精确 token 数。
+func boundAIConversationHistory(history []db.AIConversationMessage, currentText string) []db.AIConversationMessage {
+	if len(history) > aiContextMaxMessages {
+		history = history[len(history)-aiContextMaxMessages:]
+	}
+	remaining := aiContextMaxRunes - len([]rune(truncateAIContent(currentText)))
+	if remaining <= 0 {
+		return nil
+	}
+	// newestFirst 从最新历史向前选择完整消息，超预算时停止，不把半条旧消息塞入上下文。
+	newestFirst := make([]db.AIConversationMessage, 0, len(history))
+	for i := len(history) - 1; i >= 0; i-- {
+		message := history[i]
+		message.Content = truncateAIContent(message.Content)
+		messageRunes := len([]rune(message.Content))
+		if messageRunes > remaining {
+			break
+		}
+		newestFirst = append(newestFirst, message)
+		remaining -= messageRunes
+	}
+	result := make([]db.AIConversationMessage, len(newestFirst))
+	for i := range newestFirst {
+		result[len(newestFirst)-1-i] = newestFirst[i]
+	}
+	return result
+}
+
 // truncateAIContent 封装truncateAI内容业务协调。
 func truncateAIContent(content string) string {
 	// maxRunes 用于本次流程后续判断的maxRunes
-	const maxRunes = 2000
+	const maxRunes = aiMessageMaxRunes
 	// runes 用于本次流程后续判断的runes
 	runes := []rune(content)
 	if len(runes) <= maxRunes {
