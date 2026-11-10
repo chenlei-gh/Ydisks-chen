@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"xianyu-go/internal/db"
@@ -25,6 +27,9 @@ func TestChatSessionReplyModeEndpoint(t *testing.T) {
 	if err := store.Chats.UpsertSession(ctx, session); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, err := store.Chats.SaveMessage(ctx, session, db.ChatMessage{MessageKey: "handoff-incoming", Direction: "incoming", SenderID: "buyer-1", SenderName: "买家", MessageType: "text", Content: "你好", Status: "received", SentAt: 1}, true); err != nil {
+		t.Fatal(err)
+	}
 	handler := srv.Router()
 	cookie := loginHelper(t, handler)
 	body := `{"account_id":"chat-handoff-account","chat_id":"chat-handoff-session","mode":"manual"}`
@@ -37,6 +42,27 @@ func TestChatSessionReplyModeEndpoint(t *testing.T) {
 	}
 	if claimed, claimErr := store.Chats.ClaimAutoReply(ctx, accountID, session.ChatID); claimErr != nil || claimed {
 		t.Fatalf("automatic claim during manual mode=%v err=%v", claimed, claimErr)
+	}
+
+
+	// 会话列表 DTO 必须返回持久化模式，供聊天页面按钮准确显示当前状态。
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/chat/sessions?account_id="+accountID, nil)
+	listRequest.AddCookie(cookie)
+	listRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(listRecorder, listRequest)
+	if listRecorder.Code != http.StatusOK {
+		t.Fatalf("list sessions status=%d body=%s", listRecorder.Code, listRecorder.Body.String())
+	}
+	var listResponse struct {
+		Sessions []struct {
+			AutoReplyMode string `json:"auto_reply_mode"`
+		} `json:"sessions"`
+	}
+	if err := json.Unmarshal(listRecorder.Body.Bytes(), &listResponse); err != nil {
+		t.Fatal(err)
+	}
+	if len(listResponse.Sessions) != 1 || listResponse.Sessions[0].AutoReplyMode != "manual" {
+		t.Fatalf("session DTO mode response=%+v", listResponse.Sessions)
 	}
 
 	restoreBody := `{"account_id":"chat-handoff-account","chat_id":"chat-handoff-session","mode":"auto"}`
