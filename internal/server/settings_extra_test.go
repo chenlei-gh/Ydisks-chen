@@ -668,3 +668,46 @@ func TestSystemSettingsEndpointUsesExplicitSecretCommands(t *testing.T) {
 		t.Fatalf("legacy forbidden status=%d body=%s", legacyForbiddenRec.Code, legacyForbiddenRec.Body.String())
 	}
 }
+
+
+// TestAIReplyMaxCompletionTokensAPI 验证账号级最大输出 Token 配置通过现有设置 API 保存、读取，并拒绝负数。
+func TestAIReplyMaxCompletionTokensAPI(t *testing.T) {
+	srv, _, cleanup := newTestServer(t)
+	defer cleanup()
+	handler := srv.Router()
+	cookie := loginHelper(t, handler)
+
+	body := `{"ai_enabled":true,"auto_adjust_price_enabled":false,"max_discount_percent":10,"max_discount_amount":100,"max_bargain_rounds":3,"max_completion_tokens":2048,"custom_prompts":"","ai_mode":"bargain_only"}`
+	saveRequest := httptest.NewRequest(http.MethodPut, "/ai-reply-settings/acc1", strings.NewReader(body))
+	saveRequest.AddCookie(cookie)
+	saveResponse := httptest.NewRecorder()
+	handler.ServeHTTP(saveResponse, saveRequest)
+	if saveResponse.Code != http.StatusOK {
+		t.Fatalf("save status=%d body=%s", saveResponse.Code, saveResponse.Body.String())
+	}
+
+	getRequest := httptest.NewRequest(http.MethodGet, "/ai-reply-settings/acc1", nil)
+	getRequest.AddCookie(cookie)
+	getResponse := httptest.NewRecorder()
+	handler.ServeHTTP(getResponse, getRequest)
+	if getResponse.Code != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", getResponse.Code, getResponse.Body.String())
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(getResponse.Body.Bytes(), &settings); err != nil {
+		t.Fatalf("decode settings: %v", err)
+	}
+	if settings["max_completion_tokens"] != float64(2048) {
+		t.Fatalf("max_completion_tokens=%v want 2048", settings["max_completion_tokens"])
+	}
+
+	invalidRequest := httptest.NewRequest(http.MethodPut, "/ai-reply-settings/acc1", strings.NewReader(
+		`{"ai_enabled":true,"auto_adjust_price_enabled":false,"max_discount_percent":10,"max_discount_amount":100,"max_bargain_rounds":3,"max_completion_tokens":-1,"custom_prompts":"","ai_mode":"bargain_only"}`,
+	))
+	invalidRequest.AddCookie(cookie)
+	invalidResponse := httptest.NewRecorder()
+	handler.ServeHTTP(invalidResponse, invalidRequest)
+	if invalidResponse.Code != http.StatusBadRequest {
+		t.Fatalf("negative max_completion_tokens status=%d body=%s", invalidResponse.Code, invalidResponse.Body.String())
+	}
+}
