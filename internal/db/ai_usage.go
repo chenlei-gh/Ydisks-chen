@@ -62,7 +62,9 @@ func (a *AIUsage) Record(ctx context.Context, record AIUsageRecord) error {
 	if record.PromptTokens < 0 || record.CompletionTokens < 0 || record.TotalTokens < 0 || record.DurationMS < 0 {
 		return errors.New("AI 用量数值不能为负数")
 	}
+	// now 是本次用量记录采用的 UTC 时间。
 	now := time.Now().UTC()
+	// err 是本次用量账本插入操作的数据库错误。
 	_, err := a.DB.ExecContext(ctx, `
 		INSERT INTO ai_usage_records
 		(cookie_id,provider,model,task_type,prompt_tokens,completion_tokens,total_tokens,duration_ms,status,error_kind,usage_date,created_at_unix)
@@ -84,6 +86,7 @@ func (a *AIUsage) DailySummaryForUser(ctx context.Context, userID int64, startDa
 	if !validAIUsageDate(startDate) || !validAIUsageDate(endDate) || startDate > endDate {
 		return nil, errors.New("AI 用量日期范围无效")
 	}
+	// rows 和 err 分别保存用户用量聚合查询结果集及查询错误。
 	rows, err := a.DB.QueryContext(ctx, `
 		SELECT u.usage_date,u.provider,u.model,u.task_type,COUNT(*),
 		       SUM(CASE WHEN u.status='failed' THEN 1 ELSE 0 END),
@@ -97,9 +100,12 @@ func (a *AIUsage) DailySummaryForUser(ctx context.Context, userID int64, startDa
 		return nil, err
 	}
 	defer rows.Close()
+	// summaries 保存当前用户日期范围内的分组用量汇总。
 	var summaries []AIUsageDailySummary
 	for rows.Next() {
+		// summary 保存当前数据库结果行对应的用量汇总。
 		var summary AIUsageDailySummary
+		// err 是当前用量汇总行的字段扫描错误。
 		if err := rows.Scan(&summary.Date, &summary.Provider, &summary.Model, &summary.TaskType,
 			&summary.Calls, &summary.FailedCalls, &summary.PromptTokens, &summary.CompletionTokens,
 			&summary.TotalTokens, &summary.DurationMS); err != nil {
@@ -112,6 +118,7 @@ func (a *AIUsage) DailySummaryForUser(ctx context.Context, userID int64, startDa
 
 // validAIUsageDate 校验日期必须采用 YYYY-MM-DD 格式。
 func validAIUsageDate(value string) bool {
+	// parsed 和 err 分别保存解析后的日期及日期格式校验错误。
 	parsed, err := time.Parse("2006-01-02", value)
 	return err == nil && parsed.Format("2006-01-02") == value
 }
