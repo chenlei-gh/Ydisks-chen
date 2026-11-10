@@ -214,6 +214,7 @@
 - **阶段 3.3 已完成（决策）**：经审计不需要全局 ExternalOperationService。各域的订单 ledger/proof、消息记录/echo、批次行 lease/ItemID checkpoint 有不同业务约束；共享状态术语和测试场景即可。
 - **阶段 3.4 已完成（责任边界）**：lease/token/attempt 只对本地 DB 写入提供 fencing，不构成远端 exactly-once。闲鱼远端幂等键/按请求身份查询能力尚未证实。
 - **阶段 3.5 待完成**：需要把状态迁移、重复回调、超时和本地提交失败测试汇总，并在单商品发布修复后执行。
+- **阶段 3.5 证据盘点（尚不勾选完成）**：已核实单商品状态迁移/重复 operation ID/重复启动/unknown 隔离测试 `TestSinglePublishOperationsStateTransitions`、`TestSinglePublishOperationsUnknownCannotBeStartedAgain`；PR #9 增加远端检查点提交失败与最终状态提交失败恢复测试；PR #13 的表驱动场景覆盖远端超时和远端成功后检查点持久化失败；PR #16 覆盖批量 `post_publish` 租约接管。上述测试分别有已通过的 CI 证据，但目前尚未找到一个明确覆盖“重复平台回调”的专门测试，因此 3.5 继续待办，不把重复提交/重复状态迁移误称为重复回调。
 - **阶段 4.1 部分完成**：已审计单商品、批量发布、批次行恢复、聊天图片上传/发送边界；仍需补齐规格发布和临时图片文件生命周期审计。
 - **阶段 4.2 已确认缺口**：单商品发布先调用 MTOP，获得 ItemID 后才本地 Upsert；没有远端调用前的持久化操作检查点。HTTP 已对已知 ItemID 的本地落库失败给出“勿重复发布”提示，但硬中断/响应丢失时缺少可恢复的本地身份记录。
 - **阶段 4.3 部分完成**：批量行已有独立状态、worker token、remote_started、ItemID/post_publish 检查点；需补齐 post_publish 续跑和 lease takeover 的针对性测试证据。
@@ -326,6 +327,6 @@
 - **持久化读写兼容点已定位**：`internal/db/chat.go` 的 `ListSessions`、`FindSession`、`ListSessionPage` 使用显式 SELECT 列表和固定 Scan 顺序，新增会话模式字段时必须同步更新三处；`UpsertSession` 和 `SaveMessage` 使用显式 INSERT 列表，新增字段依赖数据库默认值即可，不应把默认模式写进每次会话同步以免覆盖人工接管状态。
 - **跨层接入位置已核实**：应用模型在 `internal/application/chat/service.go`；数据库转换在 `internal/adapter/chat_repository.go`；聊天 HTTP Port 由 `ChatPort` 暴露；会话响应 DTO 在 `internal/server/success_contract.go`；路由在 `internal/server/versioned_chat_task_routes.go`；OpenAPI 在 `api/openapi.yaml`；前端会话类型/API/UI 分别在 `frontend/app/features/chat/models.ts`、`api.ts`、`pages/Chat.tsx`。
 - **自动回复最终闸门已确认**：`internal/engine/reply.go` 的 `ReplyService.deliver` 是商品首次回复和普通自动回复共同经过的最终投递入口；在这里做持久化条件 claim 可覆盖 API、关键词、AI、默认和商品首次回复，不需要修改消息分发器，也不扩展现有进程内 `SessionOperationGate`。
-- **下一步只做缺失实现**：新增 00061 三方言迁移（会话模式默认 `auto`，并用递增 gate version 让条件更新在 MySQL 上也有明确受影响行数）；增加按用户归属设置模式和自动回复条件 claim；把模式返回 UI 并增加人工接管/恢复按钮；补数据库三方言、最终投递闸门和 API/前端回归。以上为本轮源码盘点，不代表功能已经实现或测试通过。
+- **实施结果更新**：上述 00061 三方言迁移、按用户归属切换会话模式、原子自动回复 claim、HTTP/OpenAPI、聊天页人工接管/恢复入口及竞态回归均已进入 PR #18；最终 CI 状态与静态资源阻塞见下方 PR #18 记录。
 - **PR #18（5.4 实施进展）**：已完成上述最小实现并提交。最新 CI run [42759850663](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42759850663)：Go 检查成功（包括完整 Go 测试与 server race 子集）、MySQL/PostgreSQL 多数据库回归成功、冒烟成功、改动范围识别成功；React job 仅在“校验嵌入式前端产物”失败。失败原因是前端构建生成的 `internal/webui/static` 尚未同步到仓库，不是 TypeScript、前端测试或 OpenAPI 检查失败。PR #18 保持 open；不绕过该校验，不提前合并。最终静态资源同步与 PR #15 一并留待用户有电脑时处理。
 - **5.5 会话上下文预审（仅源码审计，未改代码）**：`internal/engine/ai.go` 的 `conversationContext` 目前只从 `ai_conversations` 读取最近 10 条消息，`truncateAIContent` 对单条内容做字符截断；`AIReply.AddConversationExchange` 仅在 AI 生成回复后原子保存本轮买家/AI消息。人工发送经 `internal/application/chat/send.go` 的 `SendText` 持久化到 `chat_messages`，不会写入 `ai_conversations`，因此后续 AI 上下文看不到人工回复。`ChatStore.ListMessages` 可按账号/会话读取本地消息，但现有查询未按方向、状态或消息类型过滤；直接拼接会重复包含 AI 消息、系统消息或未成功发送的内容，且可能把当前触发消息重复加入。下一步应先定义合并规则：只纳入有效买家消息与已确认送达的人工/AI出站消息，排除系统/失败/不确定消息并按消息键或时间避免重复；再设置总字符/token预算与截断优先级。当前尚未实现摘要，也没有总 token 预算，不应误标为已有能力。
