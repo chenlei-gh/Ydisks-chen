@@ -509,9 +509,12 @@ func unsafeOfferedPrice(reply string, minimum float64) (float64, bool) {
 }
 
 const (
+	// aiContextMaxMessages 限制进入模型的历史消息条数。
 	aiContextMaxMessages = 10
-	aiContextMaxRunes    = 8000
-	aiMessageMaxRunes    = 2000
+	// aiContextMaxRunes 限制历史消息与当前买家消息的总 rune 数。
+	aiContextMaxRunes = 8000
+	// aiMessageMaxRunes 限制单条历史或当前消息的 rune 数。
+	aiMessageMaxRunes = 2000
 )
 
 // boundAIConversationHistory 按最近消息优先限制历史条数和“历史+当前买家消息”的总字符量。
@@ -520,15 +523,19 @@ func boundAIConversationHistory(history []db.AIConversationMessage, currentText 
 	if len(history) > aiContextMaxMessages {
 		history = history[len(history)-aiContextMaxMessages:]
 	}
+	// remaining 保存扣除当前买家消息后可分配给历史消息的 rune 预算。
 	remaining := aiContextMaxRunes - len([]rune(truncateAIContent(currentText)))
 	if remaining <= 0 {
 		return nil
 	}
 	// newestFirst 从最新历史向前选择完整消息，超预算时停止，不把半条旧消息塞入上下文。
 	newestFirst := make([]db.AIConversationMessage, 0, len(history))
+	// i 从最新历史向最旧历史反向遍历。
 	for i := len(history) - 1; i >= 0; i-- {
+		// message 保存当前待加入上下文的历史消息副本。
 		message := history[i]
 		message.Content = truncateAIContent(message.Content)
+		// messageRunes 保存当前消息截断后的 rune 数。
 		messageRunes := len([]rune(message.Content))
 		if messageRunes > remaining {
 			break
@@ -536,7 +543,9 @@ func boundAIConversationHistory(history []db.AIConversationMessage, currentText 
 		newestFirst = append(newestFirst, message)
 		remaining -= messageRunes
 	}
+	// result 保存恢复为时间正序的预算内历史消息。
 	result := make([]db.AIConversationMessage, len(newestFirst))
+	// i 遍历反向收集的消息并写入正序位置。
 	for i := range newestFirst {
 		result[len(newestFirst)-1-i] = newestFirst[i]
 	}
