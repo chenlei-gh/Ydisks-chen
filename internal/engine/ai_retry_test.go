@@ -42,6 +42,7 @@ func newAIResponse(status int, retryAfter, body string) *http.Response {
 
 // TestAIRetryRetriesTemporaryStatusesOnce 验证临时 HTTP 状态最多触发一次重试且请求体可完整重放。
 func TestAIRetryRetriesTemporaryStatusesOnce(t *testing.T) {
+	// status 是本轮要覆盖的临时 HTTP 状态码。
 	for _, status := range []int{http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			// calls 记录底层传输实际收到的请求次数。
@@ -94,6 +95,7 @@ func TestAIRetryRetriesTransientNetworkError(t *testing.T) {
 
 // TestAIRetryDoesNotRetryQuotaOrAuthenticationFailures 验证额度、认证和非临时错误不会重试。
 func TestAIRetryDoesNotRetryQuotaOrAuthenticationFailures(t *testing.T) {
+	// testCase 是需要验证不重试的错误类别及响应内容。
 	for _, testCase := range []struct {
 		name   string
 		status int
@@ -122,7 +124,7 @@ func TestAIRetryDoesNotRetryQuotaOrAuthenticationFailures(t *testing.T) {
 			}
 			// body 验证额度识别过程没有消费 SDK 需要读取的响应体。
 			body, readErr := io.ReadAll(response.Body)
-			if readErr != nil || !strings.Contains(string(body), strings.TrimSpace(testCase.body)) && testCase.body != "invalid api key" && testCase.body != "permission denied" && testCase.body != "billing required" {
+			if readErr != nil || string(body) != testCase.body {
 				t.Fatalf("原始错误响应体应保持可读: body=%q err=%v", body, readErr)
 			}
 			_ = response.Body.Close()
@@ -134,12 +136,15 @@ func TestAIRetryDoesNotRetryQuotaOrAuthenticationFailures(t *testing.T) {
 func TestAIRetryHonorsRetryAfter(t *testing.T) {
 	// now 是解析 HTTP 日期时使用的固定参考时间。
 	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	// got 是整数秒 Retry-After 解析后的等待时间。
 	if got := aiRetryDelayAt("3", now); got != 3*time.Second {
 		t.Fatalf("秒数 Retry-After=%s，期望 3s", got)
 	}
+	// got 是 HTTP 日期 Retry-After 解析后的等待时间。
 	if got := aiRetryDelayAt(now.Add(5*time.Second).Format(http.TimeFormat), now); got != 5*time.Second {
 		t.Fatalf("日期 Retry-After=%s，期望 5s", got)
 	}
+	// got 是无效 Retry-After 使用的默认退避时间。
 	if got := aiRetryDelayAt("invalid", now); got != 250*time.Millisecond {
 		t.Fatalf("无效 Retry-After 应使用短退避，实际 %s", got)
 	}
