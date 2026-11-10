@@ -210,6 +210,7 @@ func (r *ReplyService) deliver(ctx context.Context, m ChatMessage, res *ReplyRes
 		return nil
 	}
 	if strings.TrimSpace(m.ChatID) != "" {
+		// claimed 和 claimErr 决定当前自动回复能否通过持久化人工接管闸门。
 		claimed, claimErr := r.store.Chats.ClaimAutoReply(ctx, r.cookieID, m.ChatID)
 		if claimErr != nil {
 			return fmt.Errorf("领取会话自动回复资格: %w", claimErr)
