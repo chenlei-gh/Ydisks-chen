@@ -139,6 +139,7 @@ type updateChatSessionReplyModeRequest struct {
 // updateChatSessionReplyMode 在当前用户归属范围内切换会话自动回复或人工接管模式。
 func (s *Server) updateChatSessionReplyMode(w http.ResponseWriter, r *http.Request) {
 	session := auth.SessionFromContext(r.Context())
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var input updateChatSessionReplyModeRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeErrCode(w, http.StatusBadRequest, "chat_reply_mode_invalid", "请求参数无效", "")
