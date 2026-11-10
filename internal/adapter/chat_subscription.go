@@ -102,7 +102,7 @@ func chatApplicationSession(session *db.ChatSession) chatapp.Session {
 	}
 	return chatapp.Session{
 		AccountID: session.CookieID, ChatID: session.ChatID, PeerUserID: session.BuyerID,
-		PeerName: session.BuyerName, PeerAvatar: session.BuyerAvatar, AccountRole: session.AccountRole,
+		PeerName: session.BuyerName, PeerAvatar: session.BuyerAvatar, AccountRole: session.AccountRole, AutoReplyMode: session.AutoReplyMode,
 		BuyerUserID: session.BuyerUserID, SellerUserID: session.SellerUserID, RoleItemID: session.RoleItemID, RoleSource: session.RoleSource, ItemID: session.ItemID,
 		ItemTitle: session.ItemTitle, ItemImageURL: session.ItemImageURL, LastMessage: session.LastMessage, LastMessageAt: session.LastMessageAt,
 		UnreadCount: session.UnreadCount,
