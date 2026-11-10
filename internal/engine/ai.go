@@ -122,7 +122,7 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 	}
 
 	// resp 保存模型响应；err 保存模型调用或用量记录流程的错误。
-	resp, err := a.requestAICompletion(ctx, m, aiCfg, history, systemPrompt)
+	resp, err := a.requestAICompletion(ctx, m, aiCfg, history, systemPrompt, cfg.MaxCompletionTokens)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 }
 
 // requestAICompletion 构造多模态消息、调用模型并记录本次请求的 Token 用量。
-func (a *AIReplierImpl) requestAICompletion(ctx context.Context, m ChatMessage, aiCfg *globalAIConfig, history []db.AIConversationMessage, systemPrompt string) (*openai.ChatCompletionResponse, error) {
+func (a *AIReplierImpl) requestAICompletion(ctx context.Context, m ChatMessage, aiCfg *globalAIConfig, history []db.AIConversationMessage, systemPrompt string, maxCompletionTokens int) (*openai.ChatCompletionResponse, error) {
 	// clientCfg 保存当前账号模型服务的连接配置。
 	clientCfg := openai.DefaultConfig(aiCfg.APIKey)
 	if aiCfg.BaseURL != "" {
@@ -217,9 +217,11 @@ func (a *AIReplierImpl) requestAICompletion(ctx context.Context, m ChatMessage, 
 	// requestStartedAt 记录模型请求开始时间，用于统计实际调用耗时。
 	requestStartedAt := time.Now()
 	// resp 和 err 分别保存模型响应及调用错误。
-	resp, err := client.CreateChatCompletion(aiCtx, openai.ChatCompletionRequest{
-		Model: requestModel, Messages: messages, Temperature: 0.7,
-	})
+	request := openai.ChatCompletionRequest{Model: requestModel, Messages: messages, Temperature: 0.7}
+	if maxCompletionTokens > 0 {
+		request.MaxCompletionTokens = maxCompletionTokens
+	}
+	resp, err := client.CreateChatCompletion(aiCtx, request)
 	// taskType 区分普通文本请求与实际附带买家图片的视觉请求。
 	taskType := "text"
 	if imageAttached {
