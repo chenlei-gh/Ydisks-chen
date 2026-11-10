@@ -40,7 +40,7 @@ func NewChatSendingApplication(domainService *domainchat.Service, store *db.Stor
 		NewChatOutgoingRepository(domainService),
 		NewChatSenderProvider(manager),
 		NewChatImageUploader(store, clientProvider, manager),
-		NewChatSubscriptionProvider(domainService, store),
+		NewChatSubscriptionProvider(domainService),
 		NewChatRefreshProvider(domainService, manager),
 		downloadAutomationImage,
 		NewChatIdentityResolver(store, clientProvider, manager),
