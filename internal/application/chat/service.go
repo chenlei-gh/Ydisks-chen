@@ -532,6 +532,7 @@ func (s *Service) SetAutoReplyMode(ctx context.Context, userID int64, accountID,
 	if s == nil || s.repository == nil || userID <= 0 || accountID == "" || chatID == "" || (mode != "auto" && mode != "manual") {
 		return ErrInvalidInput
 	}
+	// repository 和 ok 表示当前存储适配器是否支持会话级人工接管。
 	repository, ok := s.repository.(SessionReplyModeRepository)
 	if !ok {
 		return ErrSessionUnavailable
