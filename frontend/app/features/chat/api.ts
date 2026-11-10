@@ -65,7 +65,7 @@ export const updateChatSessionReplyMode = async (
   options?: RequestControlOptions,
 ): Promise<OperationResponse> =>
   runContractRequest(
-    signal => contractClient.PUT('/api/v1/chat/sessions/reply-mode', {
+    /* signal 是本次会话模式切换请求的超时与取消控制信号。 */ signal => contractClient.PUT('/api/v1/chat/sessions/reply-mode', {
       body: { account_id: accountId, chat_id: chatId, mode },
       signal,
     }),
