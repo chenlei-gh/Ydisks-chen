@@ -320,3 +320,11 @@
 
 - **PR #15 最新 CI（run 42723693579）**：Go 检查成功（包含 Go 测试与 server 并发 smoke race）；MySQL/PostgreSQL 多数据库回归成功；冒烟测试成功；React 前端检查失败，失败步骤为“构建并校验嵌入式前端产物”。当前阻塞仍是 npm run build 生成的 internal/webui/static 与仓库提交静态资源不一致，不是 TypeScript、前端测试或本次图片重定向测试失败。PR #15 head 为 a69c2901f9ff4a0abc722a009fa55260c7b34d72，保持 open、未合并。静态资源同步需等用户有电脑环境；当前不要求用户执行任何操作。
 NaNNaNNaN
+
+### 2026-11-10 阶段 5.4 数据库与接入路径二次盘点
+
+- **真实建表迁移已定位**：三方言的 `chat_sessions` 均由 `internal/db/migrations/{sqlite,mysql,postgres}/00024_chat_account_tasks.sql` 创建；不是 `00001_init.sql`。后续相关迁移依次为 00041 会话可见性、00044 用户隐藏与历史清空水位、00045 实时消息清空截止线、00047 会话角色。当前三方言最新迁移均为 00060，`internal/db/db.go` 通过 Goose 嵌入 `migrations/{sqlite,mysql,postgres}/*.sql` 执行，因此本功能的新迁移应为三方言 00061。
+- **持久化读写兼容点已定位**：`internal/db/chat.go` 的 `ListSessions`、`FindSession`、`ListSessionPage` 使用显式 SELECT 列表和固定 Scan 顺序，新增会话模式字段时必须同步更新三处；`UpsertSession` 和 `SaveMessage` 使用显式 INSERT 列表，新增字段依赖数据库默认值即可，不应把默认模式写进每次会话同步以免覆盖人工接管状态。
+- **跨层接入位置已核实**：应用模型在 `internal/application/chat/service.go`；数据库转换在 `internal/adapter/chat_repository.go`；聊天 HTTP Port 由 `ChatPort` 暴露；会话响应 DTO 在 `internal/server/success_contract.go`；路由在 `internal/server/versioned_chat_task_routes.go`；OpenAPI 在 `api/openapi.yaml`；前端会话类型/API/UI 分别在 `frontend/app/features/chat/models.ts`、`api.ts`、`pages/Chat.tsx`。
+- **自动回复最终闸门已确认**：`internal/engine/reply.go` 的 `ReplyService.deliver` 是商品首次回复和普通自动回复共同经过的最终投递入口；在这里做持久化条件 claim 可覆盖 API、关键词、AI、默认和商品首次回复，不需要修改消息分发器，也不扩展现有进程内 `SessionOperationGate`。
+- **下一步只做缺失实现**：新增 00061 三方言迁移（会话模式默认 `auto`，并用递增 gate version 让条件更新在 MySQL 上也有明确受影响行数）；增加按用户归属设置模式和自动回复条件 claim；把模式返回 UI 并增加人工接管/恢复按钮；补数据库三方言、最终投递闸门和 API/前端回归。以上为本轮源码盘点，不代表功能已经实现或测试通过。
