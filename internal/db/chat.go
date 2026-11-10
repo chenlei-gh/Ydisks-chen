@@ -31,8 +31,8 @@ type ChatSession struct {
 	RoleSource string `json:"role_source"`
 	// AutoReplyMode 是该会话的自动回复模式；旧会话迁移后默认为 auto。
 	AutoReplyMode string `json:"auto_reply_mode"`
-	ItemID     string `json:"item_id"`
-	ItemTitle  string `json:"item_title"`
+	ItemID        string `json:"item_id"`
+	ItemTitle     string `json:"item_title"`
 	// ItemImageURL 是会话商品主图的公开地址，仅用于聊天列表展示。
 	ItemImageURL  string `json:"item_image_url"`
 	LastMessage   string `json:"last_message"`
