@@ -41,6 +41,9 @@ func TestMultiDBChatSessionReplyModeAndClaim(t *testing.T) {
 			if claimed, claimErr := target.store.Chats.ClaimAutoReply(ctx, accountID, session.ChatID); claimErr != nil || !claimed {
 				t.Fatalf("auto mode claim=%v err=%v, want true", claimed, claimErr)
 			}
+			if claimed, claimErr := target.store.Chats.ClaimAutoReply(ctx, accountID, session.ChatID); claimErr != nil || !claimed {
+				t.Fatalf("second auto mode claim=%v err=%v, want true", claimed, claimErr)
+			}
 			if err := target.store.Chats.SetAutoReplyMode(ctx, userID, accountID, session.ChatID, "invalid"); err == nil {
 				t.Fatal("invalid reply mode must be rejected")
 			}
