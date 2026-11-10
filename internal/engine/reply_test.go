@@ -275,31 +275,42 @@ func TestParsePrice(t *testing.T) {
 
 // TestReplyServiceManualHandoffBlocksDelivery 验证人工接管会在统一最终投递闸门阻止自动回复，恢复后重新允许投递。
 func TestReplyServiceManualHandoffBlocksDelivery(t *testing.T) {
+	// store 和 cleanup 提供隔离的回复测试数据库及清理动作。
 	store, cleanup := newReplyStore(t)
 	defer cleanup()
+	// ctx 为本次人工接管与自动回复测试提供上下文。
 	ctx := context.Background()
+	// admin 和 err 保存测试账号所有者及其查询结果。
 	admin, err := store.Users.GetByUsername(ctx, "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// session 是本次需要切换人工接管状态的聊天会话。
 	session := db.ChatSession{CookieID: "cid", ChatID: "manual-handoff-chat", BuyerID: "buyer1"}
+	// err 保存测试会话的初始化结果。
 	if err := store.Chats.UpsertSession(ctx, session); err != nil {
 		t.Fatal(err)
 	}
+	// err 保存人工接管模式的持久化结果。
 	if err := store.Chats.SetAutoReplyMode(ctx, admin.ID, "cid", session.ChatID, "manual"); err != nil {
 		t.Fatal(err)
 	}
+	// err 保存默认自动回复规则的测试数据写入结果。
 	if _, err := store.DB.ExecContext(ctx, `INSERT INTO default_replies (cookie_id,enabled,reply_content,reply_once) VALUES ('cid',1,'自动回复内容',0)`); err != nil {
 		t.Fatal(err)
 	}
+	// sender 记录最终投递的文本消息，供断言人工接管效果。
 	sender := &recordingSender{}
+	// service 是连接真实测试数据库和记录型发送器的回复服务。
 	service := NewReplyService("cid", store, sender, nil, nil, nil)
+	// err 保存人工接管或恢复自动模式后的消息处理结果。
 	if err := service.Handle(ctx, chatMsg("你好", "item1", session.ChatID)); err != nil {
 		t.Fatal(err)
 	}
 	if len(sender.texts) != 0 {
 		t.Fatalf("manual handoff must block automatic delivery, got %+v", sender.texts)
 	}
+	// err 保存恢复自动回复模式的数据库结果。
 	if err := store.Chats.SetAutoReplyMode(ctx, admin.ID, "cid", session.ChatID, "auto"); err != nil {
 		t.Fatal(err)
 	}
