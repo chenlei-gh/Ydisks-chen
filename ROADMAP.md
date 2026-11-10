@@ -143,7 +143,7 @@
 - [x] 5.1 商品级 AI 策略：已审计商品级启停/继承、专属上下文、归属校验、AI 回复覆盖和前端管理入口；现有实现覆盖目标，本轮没有证据支持重复开发。
 - [!] 5.2 买家图片理解：PR #15 已实现可选视觉模型、图片消息提取、下载与格式/大小/像素限制、文本降级及图片不可信规则；最新 head a69c2901f9ff4a0abc722a009fa55260c7b34d72 的 CI run 42723693579 中 Go、多数据库、冒烟通过，React 仅因构建后嵌入式静态资源与仓库版本不一致而失败。静态资源同步包已准备，因用户当前无电脑暂缓；不要求手机操作，不合并。
 - [~] 5.3 图片网络安全：已核对 PR #15 下载器实际调用 `netguard.PublicHTTPClient`，并审阅 DNS 解析后直连已验证 IP、私网/回环/主要保留网段拒绝、禁用连接复用及同主机重定向策略；DNS rebinding 定向回归已由 PR #17 合并并通过 CI。买家图片下载入口的跨主机重定向定向回归已补入 PR #15；测试代码已审阅，但其 CI 尚未全部通过（同一 PR React 静态资源校验失败），因此该项仍待完整验证。
-- [~] 5.4 人工接管：审计已确认当前没有会话级人工接管/恢复状态或聊天页开关。已核对 `ChatStore`、`chat_sessions`、`FindSession` 的用户归属查询及 `ReplyService.deliver` 统一投递入口；现有 `SessionOperationGate` 仅为进程内人工操作锁，不能替代持久化闸门。最小方案：在 `chat_sessions` 增加 `auto_reply_mode`（默认 `auto`）与递增 `reply_gate_version`；自动 claim 与 manual/auto 模式切换均条件递增版本，在数据库行级竞争中确定先后；claim 放在回复生成后、`SendReply` 前。尚未编码；下一步核对迁移注册、会话 DTO/路由/OpenAPI、前端会话头部与发送实现，再按最小范围实现并补三数据库与竞态测试。
+- [~] 5.4 人工接管：实现已提交到 PR #18（Stage 5.4），包含三方言 00061 迁移、会话级 `auto/manual` 持久化模式、带递增 gate version 的原子自动回复 claim、用户归属校验、HTTP/OpenAPI 与聊天页接管/恢复入口，以及模式切换与自动 claim 竞态测试。PR #18 最新 head `d255cf5ecd78489145981fd056b3507b75958a6e` 的 CI run 42759850663：Go、MySQL/PostgreSQL、冒烟和改动范围检查全部成功；React 仅因嵌入式静态资源未同步失败。代码与数据库验证已通过，但 PR 未合并，阶段暂不标记完成；等待最终静态资源上传后重跑完整 CI。
 - [ ] 5.5 会话上下文：把人工回复纳入上下文；建立消息条数、字符数和 token 预算、摘要与截断优先级。
 - [ ] 5.6 AI 重试：仅对可恢复错误进行有限重试；处理 429 / 5xx / 网络错误、取消和整体超时；避免图片失败降级后再重试导致调用次数超预算。
 - [ ] 5.7 成本与调用预算：按会话/消息限制模型调用次数、总耗时和 token；记录可审计的使用量，不记录敏感内容。
@@ -319,7 +319,6 @@
 ### 2026-11-10 待办清单更新与继续执行记录
 
 - **PR #15 最新 CI（run 42723693579）**：Go 检查成功（包含 Go 测试与 server 并发 smoke race）；MySQL/PostgreSQL 多数据库回归成功；冒烟测试成功；React 前端检查失败，失败步骤为“构建并校验嵌入式前端产物”。当前阻塞仍是 npm run build 生成的 internal/webui/static 与仓库提交静态资源不一致，不是 TypeScript、前端测试或本次图片重定向测试失败。PR #15 head 为 a69c2901f9ff4a0abc722a009fa55260c7b34d72，保持 open、未合并。静态资源同步需等用户有电脑环境；当前不要求用户执行任何操作。
-NaNNaNNaN
 
 ### 2026-11-10 阶段 5.4 数据库与接入路径二次盘点
 
@@ -328,3 +327,5 @@ NaNNaNNaN
 - **跨层接入位置已核实**：应用模型在 `internal/application/chat/service.go`；数据库转换在 `internal/adapter/chat_repository.go`；聊天 HTTP Port 由 `ChatPort` 暴露；会话响应 DTO 在 `internal/server/success_contract.go`；路由在 `internal/server/versioned_chat_task_routes.go`；OpenAPI 在 `api/openapi.yaml`；前端会话类型/API/UI 分别在 `frontend/app/features/chat/models.ts`、`api.ts`、`pages/Chat.tsx`。
 - **自动回复最终闸门已确认**：`internal/engine/reply.go` 的 `ReplyService.deliver` 是商品首次回复和普通自动回复共同经过的最终投递入口；在这里做持久化条件 claim 可覆盖 API、关键词、AI、默认和商品首次回复，不需要修改消息分发器，也不扩展现有进程内 `SessionOperationGate`。
 - **下一步只做缺失实现**：新增 00061 三方言迁移（会话模式默认 `auto`，并用递增 gate version 让条件更新在 MySQL 上也有明确受影响行数）；增加按用户归属设置模式和自动回复条件 claim；把模式返回 UI 并增加人工接管/恢复按钮；补数据库三方言、最终投递闸门和 API/前端回归。以上为本轮源码盘点，不代表功能已经实现或测试通过。
+- **PR #18（5.4 实施进展）**：已完成上述最小实现并提交。最新 CI run [42759850663](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42759850663)：Go 检查成功（包括完整 Go 测试与 server race 子集）、MySQL/PostgreSQL 多数据库回归成功、冒烟成功、改动范围识别成功；React job 仅在“校验嵌入式前端产物”失败。失败原因是前端构建生成的 `internal/webui/static` 尚未同步到仓库，不是 TypeScript、前端测试或 OpenAPI 检查失败。PR #18 保持 open；不绕过该校验，不提前合并。最终静态资源同步与 PR #15 一并留待用户有电脑时处理。
+- **5.5 会话上下文预审（仅源码审计，未改代码）**：`internal/engine/ai.go` 的 `conversationContext` 目前只从 `ai_conversations` 读取最近 10 条消息，`truncateAIContent` 对单条内容做字符截断；`AIReply.AddConversationExchange` 仅在 AI 生成回复后原子保存本轮买家/AI消息。人工发送经 `internal/application/chat/send.go` 的 `SendText` 持久化到 `chat_messages`，不会写入 `ai_conversations`，因此后续 AI 上下文看不到人工回复。`ChatStore.ListMessages` 可按账号/会话读取本地消息，但现有查询未按方向、状态或消息类型过滤；直接拼接会重复包含 AI 消息、系统消息或未成功发送的内容，且可能把当前触发消息重复加入。下一步应先定义合并规则：只纳入有效买家消息与已确认送达的人工/AI出站消息，排除系统/失败/不确定消息并按消息键或时间避免重复；再设置总字符/token预算与截断优先级。当前尚未实现摘要，也没有总 token 预算，不应误标为已有能力。
