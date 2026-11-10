@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -92,6 +93,11 @@ type ReplyResult struct {
 }
 
 // OutgoingRepository 定义发送用例需要的本地消息写入能力。
+type ManualAIContextRecorder interface {
+	// RecordManualAIContext 记录已由平台确认发送成功的人工文字回复；记录失败不得改变远端发送结果。
+	RecordManualAIContext(ctx context.Context, session Session, text string) error
+}
+
 type OutgoingRepository interface {
 	// CreateOutgoing 创建状态为 sending 的文字消息并返回幂等键。
 	CreateOutgoing(ctx context.Context, session Session, text string) (Message, error)
@@ -216,7 +222,7 @@ func (s *Service) SendReply(ctx context.Context, input ReplyInput) (*ReplyResult
 	}
 	if text != "" {
 		// textMessage 和 textErr 保存统一文字发送入口的结果及错误。
-		textMessage, textErr := s.SendText(ctx, OutgoingInput{Session: session, Text: text})
+		textMessage, textErr := s.sendText(ctx, OutgoingInput{Session: session, Text: text}, false)
 		result.Text = textMessage
 		result.TextSent = replyPartDelivered(textMessage, textErr)
 		if textErr != nil {
@@ -348,6 +354,11 @@ func (s *Service) RefreshHistory(ctx context.Context, accountID, chatID string, 
 
 // SendText 创建并发送一条文字消息，失败时尽力保留本地 failed 状态。
 func (s *Service) SendText(ctx context.Context, input OutgoingInput) (*Message, error) {
+	return s.sendText(ctx, input, true)
+}
+
+// sendText 统一执行文字发送；recordManualContext 只允许人工消息进入后续 AI 上下文。
+func (s *Service) sendText(ctx context.Context, input OutgoingInput, recordManualContext bool) (*Message, error) {
 	// session 和 text 保存规范化后的会话及消息内容。
 	session, text, err := normalizeOutgoingInput(input.Session, input.Text)
 	if err != nil {
@@ -385,6 +396,16 @@ func (s *Service) SendText(ctx context.Context, input OutgoingInput) (*Message, 
 		failed, _ := s.outgoing.SetOutgoingStatus(statusCtx, session.AccountID, message.MessageKey, "failed")
 		statusCancel()
 		return messagePointer(failed, message), fmt.Errorf("%w: %v", ErrSend, sendErr)
+	}
+	// 平台已明确返回成功后，人工文字回复才追加到 AI 历史；记录失败只告警，绝不把成功发送变成可重试错误。
+	if recordManualContext && session.ItemID != "" && session.PeerUserID != "" {
+		if recorder, ok := s.outgoing.(ManualAIContextRecorder); ok {
+			recordCtx, recordCancel := outgoingStatusContext(ctx)
+			if recordErr := recorder.RecordManualAIContext(recordCtx, session, text); recordErr != nil {
+				slog.Default().Warn("记录人工聊天回复到 AI 上下文失败", "account", session.AccountID, "chat_id", session.ChatID, "error", recordErr)
+			}
+			recordCancel()
+		}
 	}
 	// sent 和 err 保存平台发送成功后的本地状态及状态持久化错误。
 	statusCtx, statusCancel := outgoingStatusContext(ctx)
