@@ -150,6 +150,18 @@ func TestChatOutgoingRepositoryRecordsManualReplyInAIConversationHistory(t *test
 	if err != nil || len(otherHistory) != 0 {
 		t.Fatalf("mismatched item history=%+v err=%v", otherHistory, err)
 	}
+	// mismatchedPeer 保存客户端提交的错误会话对端标识。
+	mismatchedPeer := session
+	mismatchedPeer.PeerUserID = "other-buyer"
+	// err 保存错误对端标识被拒绝写入的结果。
+	if err := recorder.RecordManualAIContext(ctx, mismatchedPeer, "不应写入"); err != nil {
+		t.Fatal(err)
+	}
+	// verifiedHistory、err 保存错误对端标识提交后原会话的历史结果。
+	verifiedHistory, err := store.AIReply.ConversationHistory(ctx, session.AccountID, session.ChatID, session.ItemID, 10)
+	if err != nil || len(verifiedHistory) != 1 {
+		t.Fatalf("mismatched peer polluted history=%+v err=%v", verifiedHistory, err)
+	}
 }
 
 // TestChatSenderForwardsToRuntime 验证应用层发送器把文本与图片请求透传到账号运行时。
