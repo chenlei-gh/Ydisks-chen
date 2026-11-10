@@ -668,3 +668,53 @@ func TestSystemSettingsEndpointUsesExplicitSecretCommands(t *testing.T) {
 		t.Fatalf("legacy forbidden status=%d body=%s", legacyForbiddenRec.Code, legacyForbiddenRec.Body.String())
 	}
 }
+
+// TestAIReplyMaxCompletionTokensLegacyUpdatePreservesLimit 验证旧客户端省略新字段时保留现有设置，显式 0 才清除上限。
+func TestAIReplyMaxCompletionTokensLegacyUpdatePreservesLimit(t *testing.T) {
+	srv, _, cleanup := newTestServer(t)
+	defer cleanup()
+	handler := srv.Router()
+	cookie := loginHelper(t, handler)
+
+	save := func(body string) int {
+		request := httptest.NewRequest(http.MethodPut, "/ai-reply-settings/acc1", strings.NewReader(body))
+		request.AddCookie(cookie)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response.Code
+	}
+	read := func() map[string]any {
+		request := httptest.NewRequest(http.MethodGet, "/ai-reply-settings/acc1", nil)
+		request.AddCookie(cookie)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("read settings status=%d body=%s", response.Code, response.Body.String())
+		}
+		var settings map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &settings); err != nil {
+			t.Fatalf("decode settings: %v", err)
+		}
+		return settings
+	}
+
+	base := `"ai_enabled":true,"auto_adjust_price_enabled":false,"max_discount_percent":10,"max_discount_amount":100,"max_bargain_rounds":3,"custom_prompts":"","ai_mode":"bargain_only"`
+	if status := save("{" + base + `,"max_completion_tokens":2048}` + "}"); status != http.StatusOK {
+		t.Fatalf("initial save status=%d", status)
+	}
+	if status := save("{" + base + `,"custom_prompts":"legacy update"}` + "}"); status != http.StatusOK {
+		t.Fatalf("legacy update status=%d", status)
+	}
+	if got := read()["max_completion_tokens"]; got != float64(2048) {
+		t.Fatalf("omitted field should preserve 2048, got %v", got)
+	}
+	if status := save("{" + base + `,"max_completion_tokens":0}` + "}"); status != http.StatusOK {
+		t.Fatalf("clear limit status=%d", status)
+	}
+	if got := read()["max_completion_tokens"]; got != float64(0) {
+		t.Fatalf("explicit zero should clear limit, got %v", got)
+	}
+	if status := save("{" + base + `,"max_completion_tokens":-1}` + "}"); status != http.StatusBadRequest {
+		t.Fatalf("negative limit status=%d", status)
+	}
+}
