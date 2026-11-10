@@ -33,6 +33,7 @@ func TestBuyerMessageRemainsUserRole(t *testing.T) {
 	if err := store.Settings.Set(ctx, "ai_api_key", "sk-test"); err != nil {
 		t.Fatal(err)
 	}
+	// err 表示保存本地模型服务地址时的配置错误。
 	if err := store.Settings.Set(ctx, "ai_api_url", server.URL); err != nil {
 		t.Fatal(err)
 	}
