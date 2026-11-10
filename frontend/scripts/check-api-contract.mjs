@@ -111,6 +111,17 @@ try {
   const generatedContent = fs.readFileSync(temporarySchema);
   const checkedInContent = fs.readFileSync(checkedInSchema);
   if (!generatedContent.equals(checkedInContent)) {
+    // diffOutput 用于在 CI 日志中展示生成类型与提交产物之间的精确差异，便于直接修复而不反复猜测。
+    try {
+      const diffOutput = execFileSync('diff', ['-u', checkedInSchema, temporarySchema], { encoding: 'utf8' });
+      console.error(diffOutput);
+    } catch (/* diffError 保存 diff 命令因存在差异而返回的非零退出结果。 */ diffError) {
+      // diffText 保存 diff 命令通过异常 stdout 返回的差异文本。
+      const diffText = diffError && typeof diffError === 'object' && 'stdout' in diffError
+        ? String(diffError.stdout ?? '')
+        : '';
+      if (diffText) console.error(diffText);
+    }
     throw new Error('生成的 OpenAPI TypeScript 类型与提交产物不一致；请运行 npm run api:generate --prefix frontend。');
   }
   verifySystemSettingsWriteBoundary();
