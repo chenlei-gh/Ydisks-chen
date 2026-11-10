@@ -216,11 +216,12 @@ func (a *AIReplierImpl) requestAICompletion(ctx context.Context, m ChatMessage, 
 	messages = append(messages, currentMessage)
 	// requestStartedAt 记录模型请求开始时间，用于统计实际调用耗时。
 	requestStartedAt := time.Now()
-	// resp 和 err 分别保存模型响应及调用错误。
+	// request 保存模型聊天补全参数；未设置上限时保持 SDK 默认行为。
 	request := openai.ChatCompletionRequest{Model: requestModel, Messages: messages, Temperature: 0.7}
 	if maxCompletionTokens > 0 {
 		request.MaxCompletionTokens = maxCompletionTokens
 	}
+	// resp 保存模型返回结果；err 保存请求失败原因。
 	resp, err := client.CreateChatCompletion(aiCtx, request)
 	// taskType 区分普通文本请求与实际附带买家图片的视觉请求。
 	taskType := "text"
