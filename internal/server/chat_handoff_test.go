@@ -37,8 +37,11 @@ func TestChatSessionReplyModeEndpoint(t *testing.T) {
 		t.Fatalf("manual handoff status=%d", status)
 	}
 	stored, err := store.Chats.FindSession(ctx, userID, accountID, session.ChatID)
-	if err != nil || stored.AutoReplyMode != "manual" {
-		t.Fatalf("stored mode=%q err=%v", stored.AutoReplyMode, err)
+	if err != nil {
+		t.Fatalf("find session after handoff: %v", err)
+	}
+	if stored.AutoReplyMode != "manual" {
+		t.Fatalf("stored mode=%q, want manual", stored.AutoReplyMode)
 	}
 	if claimed, claimErr := store.Chats.ClaimAutoReply(ctx, accountID, session.ChatID); claimErr != nil || claimed {
 		t.Fatalf("automatic claim during manual mode=%v err=%v", claimed, claimErr)
