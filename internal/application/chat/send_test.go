@@ -17,6 +17,10 @@ type sendRepository struct {
 	message Message
 	// statuses 保存按调用顺序写入的消息状态。
 	statuses []string
+	// manualRecords 保存已确认发送后追加到 AI 上下文的人工回复。
+	manualRecords []string
+	// manualRecordErr 模拟 AI 上下文记录失败。
+	manualRecordErr error
 }
 
 // CreateOutgoing 创建测试文字消息。
@@ -45,6 +49,12 @@ func (r *sendRepository) SetOutgoingStatus(_ context.Context, _, _ string, statu
 	}
 	r.message.Status = status
 	return r.message, nil
+}
+
+// RecordManualAIContext 记录测试中成功发送的人工回复。
+func (r *sendRepository) RecordManualAIContext(_ context.Context, _ Session, text string) error {
+	r.manualRecords = append(r.manualRecords, text)
+	return r.manualRecordErr
 }
 
 // sendProvider 是按账号返回固定发送器的测试替身。
@@ -150,6 +160,61 @@ func TestSendTextSuccessPreservesIdempotencyKey(t *testing.T) {
 	}
 	if len(repository.statuses) != 1 || repository.statuses[0] != "sent" {
 		t.Fatalf("statuses=%v", repository.statuses)
+	}
+}
+
+// TestSendTextRecordsConfirmedManualReplyInAIContext 验证平台确认成功的人工文字会进入 AI 历史。
+func TestSendTextRecordsConfirmedManualReplyInAIContext(t *testing.T) {
+	// repository、sender 保存测试持久化端口和平台发送器。
+	repository, sender := &sendRepository{}, &sendSender{}
+	// service 保存本用例使用的聊天应用服务。
+	service := NewWithSending(nil, repository, sendProvider{sender: sender}, nil)
+	// message、err 保存人工文字发送结果。
+	message, err := service.SendText(context.Background(), OutgoingInput{Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1", ItemID: "item-1"}, Text: "人工补充说明"})
+	if err != nil || message == nil || message.Status != "sent" {
+		t.Fatalf("message=%+v err=%v", message, err)
+	}
+	if len(repository.manualRecords) != 1 || repository.manualRecords[0] != "人工补充说明" {
+		t.Fatalf("manual AI context records=%v", repository.manualRecords)
+	}
+}
+
+// TestSendTextDoesNotRecordUnconfirmedManualReply 验证失败或结果未知的发送不会进入 AI 历史。
+func TestSendTextDoesNotRecordUnconfirmedManualReply(t *testing.T) {
+	// cases 覆盖确定失败和远端结果未知两种未确认状态。
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{name: "definite failure", err: errors.New("remote rejected")},
+		{name: "uncertain", err: ErrSendUncertain},
+	}
+	// tc 表示当前待验证的发送结果场景。
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// repository、sender 保存当前场景的测试持久化端口和发送器。
+			repository, sender := &sendRepository{}, &sendSender{sendErr: tc.err}
+			// service 保存当前场景的聊天应用服务。
+			service := NewWithSending(nil, repository, sendProvider{sender: sender}, nil)
+			// err 保存未确认发送的应用层返回结果。
+			_, err := service.SendText(context.Background(), OutgoingInput{Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1", ItemID: "item-1"}, Text: "未确认消息"})
+			if err == nil || len(repository.manualRecords) != 0 {
+				t.Fatalf("err=%v manual records=%v", err, repository.manualRecords)
+			}
+		})
+	}
+}
+
+// TestManualContextRecordFailureDoesNotRetrySuccessfulSend 验证 AI 历史写入失败不会把已成功发送变成可重试错误。
+func TestManualContextRecordFailureDoesNotRetrySuccessfulSend(t *testing.T) {
+	// repository、sender 保存会故意写入失败的上下文仓储和成功发送器。
+	repository, sender := &sendRepository{manualRecordErr: errors.New("context store unavailable")}, &sendSender{}
+	// service 保存本用例使用的聊天应用服务。
+	service := NewWithSending(nil, repository, sendProvider{sender: sender}, nil)
+	// message、err 保存平台成功发送后的消息和应用层结果。
+	message, err := service.SendText(context.Background(), OutgoingInput{Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1", ItemID: "item-1"}, Text: "已发送"})
+	if err != nil || message == nil || message.Status != "sent" || len(repository.statuses) != 1 || repository.statuses[0] != "sent" {
+		t.Fatalf("message=%+v err=%v statuses=%v", message, err, repository.statuses)
 	}
 }
 
@@ -350,11 +415,14 @@ func TestSendReplyUsesTheMessagePageImagePipeline(t *testing.T) {
 	}
 	// result、sendErr 保存完整回复投递结果及错误。
 	result, sendErr := service.SendReply(context.Background(), ReplyInput{
-		Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1"},
+		Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1", ItemID: "item-1"},
 		Text:    "图片随后附上", ImageURL: "https://origin.example/reply.jpg",
 	})
 	if sendErr != nil || result == nil || !result.ImageSent || !result.TextSent || result.Image == nil || result.Text == nil {
 		t.Fatalf("result=%+v err=%v", result, sendErr)
+	}
+	if len(repository.manualRecords) != 0 {
+		t.Fatalf("automatic reply must not be recorded as manual context: %v", repository.manualRecords)
 	}
 	if sender.imageWidth != 1600 || sender.imageHeight != 900 || strings.Join(sender.calls, ",") != "image,text" {
 		t.Fatalf("统一发送顺序或尺寸错误 calls=%v size=%dx%d", sender.calls, sender.imageWidth, sender.imageHeight)
