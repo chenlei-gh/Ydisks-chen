@@ -46,12 +46,14 @@ func TestBoundAIConversationHistoryDoesNotPartiallyKeepOldMessage(t *testing.T) 
 	// history 保存一条较旧消息和一条较新的完整消息。
 	history := []db.AIConversationMessage{
 		{Role: "user", Content: strings.Repeat("旧", 1500)},
-		{Role: "assistant", Content: strings.Repeat("新", 2000)},
+		{Role: "assistant", Content: strings.Repeat("次", 2000)},
+		{Role: "user", Content: strings.Repeat("新", 2000)},
+		{Role: "assistant", Content: strings.Repeat("更", 2000)},
 	}
-	// got 保存只保留预算内最近完整消息的结果。
+	// got 保存总预算只容纳最近三条完整历史消息时的结果。
 	got := boundAIConversationHistory(history, strings.Repeat("今", 5000))
-	if len(got) != 1 || got[0].Content != strings.Repeat("新", 2000) {
-		t.Fatalf("history must keep recent complete message only, got=%+v", got)
+	if len(got) != 3 || got[0].Content != strings.Repeat("次", 2000) || got[2].Content != strings.Repeat("更", 2000) {
+		t.Fatalf("history must keep recent complete messages only, got=%+v", got)
 	}
 }
 
