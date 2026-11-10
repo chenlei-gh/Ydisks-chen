@@ -537,6 +537,7 @@ func (s *Service) SetAutoReplyMode(ctx context.Context, userID int64, accountID,
 	if !ok {
 		return ErrSessionUnavailable
 	}
+	// err 保存会话模式持久化结果，后续只转换已知的会话不存在错误。
 	err := repository.SetAutoReplyMode(ctx, userID, accountID, chatID, mode)
 	if errors.Is(err, ErrChatSessionNotFound) {
 		return ErrChatSessionNotFound
