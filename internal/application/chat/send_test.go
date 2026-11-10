@@ -400,7 +400,7 @@ func TestSendReplyUsesTheMessagePageImagePipeline(t *testing.T) {
 	}
 	// result、sendErr 保存完整回复投递结果及错误。
 	result, sendErr := service.SendReply(context.Background(), ReplyInput{
-		Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1"},
+		Session: Session{AccountID: "acc-1", ChatID: "chat-1", PeerUserID: "buyer-1", ItemID: "item-1"},
 		Text:    "图片随后附上", ImageURL: "https://origin.example/reply.jpg",
 	})
 	if sendErr != nil || result == nil || !result.ImageSent || !result.TextSent || result.Image == nil || result.Text == nil {
