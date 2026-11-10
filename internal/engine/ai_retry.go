@@ -19,6 +19,7 @@ type aiRetryTransport struct {
 
 // RoundTrip 仅重试可安全重放的请求体，并保留原始响应供 SDK 正常解析。
 func (t *aiRetryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	// response、requestErr 保存首次传输得到的响应或网络错误。
 	response, requestErr := t.base.RoundTrip(request)
 	if request.Context().Err() != nil || !isRetryableAIResponse(response, requestErr) {
 		return response, requestErr
@@ -41,6 +42,7 @@ func (t *aiRetryTransport) RoundTrip(request *http.Request) (*http.Response, err
 	if deadline, hasDeadline := request.Context().Deadline(); hasDeadline && time.Until(deadline) <= delay {
 		return response, requestErr
 	}
+	// waitErr 表示等待退避期间是否收到取消或 deadline 信号。
 	if waitErr := waitForAIRetry(request.Context(), delay); waitErr != nil {
 		if response != nil && response.Body != nil {
 			_ = response.Body.Close()
@@ -94,6 +96,7 @@ func isAIQuotaFailure(response *http.Response) bool {
 	}{Reader: io.MultiReader(bytes.NewReader(preview), originalBody), Closer: originalBody}
 	// message 是错误响应的小写文本，仅用于匹配明确的额度错误标记。
 	message := strings.ToLower(string(preview))
+	// marker 是需要阻止重试的额度或账单错误代码。
 	for _, marker := range []string{"insufficient_quota", "billing_hard_limit_reached", "quota_exceeded", "billing_not_active", "exceeded your current quota"} {
 		if strings.Contains(message, marker) {
 			return true
@@ -112,12 +115,15 @@ func aiRetryDelay(response *http.Response) time.Duration {
 
 // aiRetryDelayAt 以给定时钟解析 Retry-After，便于确定性测试秒数和 HTTP 日期。
 func aiRetryDelayAt(value string, now time.Time) time.Duration {
+	// fallbackDelay 是服务端未提供 Retry-After 时使用的短等待时间。
 	const fallbackDelay = 250 * time.Millisecond
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return fallbackDelay
 	}
-	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil && seconds >= 0 {
+	// seconds、parseErr 保存 Retry-After 的整数秒数及解析错误。
+	seconds, parseErr := strconv.ParseInt(value, 10, 64)
+	if parseErr == nil && seconds >= 0 {
 		// maxSeconds 防止异常大的 Retry-After 数值导致 duration 溢出。
 		const maxSeconds = int64((1<<63 - 1) / int64(time.Second))
 		if seconds > maxSeconds {
@@ -125,7 +131,10 @@ func aiRetryDelayAt(value string, now time.Time) time.Duration {
 		}
 		return time.Duration(seconds) * time.Second
 	}
-	if retryAt, err := http.ParseTime(value); err == nil {
+	// retryAt、dateErr 保存 Retry-After 的 HTTP 日期及解析错误。
+	retryAt, dateErr := http.ParseTime(value)
+	if dateErr == nil {
+		// delay 是服务端指定重试时间相对当前时钟的间隔。
 		delay := retryAt.Sub(now)
 		if delay > 0 {
 			return delay
