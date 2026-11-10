@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -98,26 +97,35 @@ func NewChatOutgoingRepository(service *domainchat.Service, stores ...*db.Store)
 
 // RecordManualAIContext 只把与本地会话商品一致的已确认人工回复追加到 AI 历史。
 func (r chatOutgoingRepository) RecordManualAIContext(ctx context.Context, session chatapp.Session, text string) error {
-	if r.store == nil || r.store.AIReply == nil || r.store.DB == nil {
+	if r.store == nil || r.store.AIReply == nil || r.store.Cookies == nil || r.store.Chats == nil {
 		return chatapp.ErrUnavailable
 	}
 	if session.ItemID == "" || session.PeerUserID == "" || strings.TrimSpace(text) == "" {
 		return nil
 	}
-	// itemID 与 buyerID 必须来自本地会话事实，不能信任手动发送请求中可由客户端填写的商品标识。
-	var itemID, buyerID string
-	// lookupErr 保存读取本地会话商品与买家事实的结果。
-	lookupErr := r.store.DB.QueryRowContext(ctx, `SELECT item_id,buyer_id FROM chat_sessions WHERE cookie_id=? AND chat_id=?`, session.AccountID, session.ChatID).Scan(&itemID, &buyerID)
-	if errors.Is(lookupErr, sql.ErrNoRows) || (lookupErr == nil && (itemID == "" || itemID != session.ItemID)) {
+	// owner、ownerErr 保存账号所属用户元数据；后续会话读取继续执行用户归属校验。
+	owner, ownerErr := r.store.Cookies.GetCookiePlatformRuntimeData(ctx, session.AccountID)
+	if ownerErr != nil {
+		return ownerErr
+	}
+	// storedSession、sessionErr 保存从本地读取的权威可见会话事实。
+	storedSession, sessionErr := r.store.Chats.FindSession(ctx, owner.UserID, session.AccountID, session.ChatID)
+	if errors.Is(sessionErr, db.ErrNotFound) {
 		return nil
 	}
-	if lookupErr != nil {
-		return lookupErr
+	if sessionErr != nil {
+		return sessionErr
 	}
+	// 本地商品标识不一致时拒绝写入，避免客户端参数污染其他商品的 AI 历史。
+	if storedSession == nil || storedSession.ItemID == "" || storedSession.ItemID != session.ItemID {
+		return nil
+	}
+	// buyerID 使用本地会话保存的买家标识；旧会话缺失时才回退到已通过发送入口的对端标识。
+	buyerID := storedSession.BuyerID
 	if buyerID == "" {
 		buyerID = session.PeerUserID
 	}
-	return r.store.AIReply.AddConversation(ctx, session.AccountID, session.ChatID, buyerID, itemID, db.AIConversationMessage{
+	return r.store.AIReply.AddConversation(ctx, session.AccountID, session.ChatID, buyerID, storedSession.ItemID, db.AIConversationMessage{
 		Role: "assistant", Content: text, Intent: "manual_reply",
 	})
 }
