@@ -54,6 +54,8 @@ export interface AccountDetail {
   max_discount_amount?: number;
   /** 允许的最大砍价轮次。 */
   max_bargain_rounds?: number;
+  /** 账号级最大输出 Token 数；0 表示不设置应用层上限。 */
+  max_completion_tokens?: number;
   /** 账号自定义提示词。 */
   custom_prompts?: string;
 	// 账号级计划任务
