@@ -109,6 +109,7 @@ func TestMultiDBChatSessionReplyModeClaimRace(t *testing.T) {
 			start := make(chan struct{})
 			// claimResults 和 claimErrors 分别接收自动回复 claim 的布尔结果与错误。
 			claimResults := make(chan bool, 1)
+			// claimErrors 接收自动回复 claim 的数据库错误。
 			claimErrors := make(chan error, 1)
 			// modeResult 接收人工接管更新的错误。
 			modeResult := make(chan error, 1)
