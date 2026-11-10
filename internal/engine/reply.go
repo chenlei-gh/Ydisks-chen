@@ -205,6 +205,18 @@ func (r *ReplyService) deliver(ctx context.Context, m ChatMessage, res *ReplyRes
 	if r.delivery == nil {
 		return nil
 	}
+	// 自动回复必须在最终投递前从持久化会话行领取资格；缺少仓储或会话记录时 fail closed。
+	if r.store == nil || r.store.Chats == nil {
+		return nil
+	}
+	claimed, claimErr := r.store.Chats.ClaimAutoReply(ctx, r.cookieID, m.ChatID)
+	if claimErr != nil {
+		return fmt.Errorf("领取会话自动回复资格: %w", claimErr)
+	}
+	if !claimed {
+		r.logger.DebugContext(ctx, "会话已由人工接管，跳过自动回复", "chat_id", m.ChatID)
+		return nil
+	}
 	// record 用于本次流程后续判断的record
 	record := db.DefaultReplyRecord{}
 	if res.ReplyOnce && m.ChatID != "" {
