@@ -29,6 +29,10 @@ type ChatSession struct {
 	RoleItemID string `json:"role_item_id"`
 	// RoleSource 是角色证据来源，例如 local_item 或 platform_verified。
 	RoleSource string `json:"role_source"`
+	// AutoReplyMode 是该会话的自动回复模式；旧会话迁移后默认为 auto。
+	AutoReplyMode string `json:"auto_reply_mode"`
+	// ReplyGateVersion 通过每次条件 claim / 模式切换递增，保证 MySQL RowsAffected 可判定。
+	ReplyGateVersion int64 `json:"-"`
 	ItemID     string `json:"item_id"`
 	ItemTitle  string `json:"item_title"`
 	// ItemImageURL 是会话商品主图的公开地址，仅用于聊天列表展示。
@@ -173,6 +177,51 @@ func (s *ChatStore) FindChatIDsByBuyerAndItem(ctx context.Context, cookieID, buy
 		return nil, iterationErr
 	}
 	return chatIDs, nil
+}
+
+
+ // SetAutoReplyMode 仅允许会话所属用户切换可见会话的自动回复模式。
+// reply_gate_version 在同一 UPDATE 中递增，使切换操作与自动回复 claim 在数据库行级串行化。
+func (s *ChatStore) SetAutoReplyMode(ctx context.Context, userID int64, cookieID, chatID, mode string) error {
+	if s == nil || s.DB == nil || userID <= 0 || strings.TrimSpace(cookieID) == "" || strings.TrimSpace(chatID) == "" {
+		return errors.New("会话自动回复模式参数无效")
+	}
+	if mode != "auto" && mode != "manual" {
+		return errors.New("会话自动回复模式无效")
+	}
+	result, err := s.DB.ExecContext(ctx, `UPDATE chat_sessions SET auto_reply_mode=?,reply_gate_version=reply_gate_version+1,updated_at=?
+		WHERE cookie_id=? AND chat_id=? AND is_visible=? AND user_hidden_at=0
+		AND EXISTS (SELECT 1 FROM cookies c WHERE c.id=chat_sessions.cookie_id AND c.user_id=?)`,
+		mode, time.Now().UTC().Unix(), cookieID, chatID, true, userID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ClaimAutoReply 原子领取一次会话自动回复投递资格。
+// 模式切换先提交时返回 false；claim 先提交时，该回复可继续完成。
+func (s *ChatStore) ClaimAutoReply(ctx context.Context, cookieID, chatID string) (bool, error) {
+	if s == nil || s.DB == nil || strings.TrimSpace(cookieID) == "" || strings.TrimSpace(chatID) == "" {
+		return false, errors.New("会话自动回复 claim 参数无效")
+	}
+	result, err := s.DB.ExecContext(ctx, `UPDATE chat_sessions SET reply_gate_version=reply_gate_version+1
+		WHERE cookie_id=? AND chat_id=? AND auto_reply_mode='auto'`, cookieID, chatID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected > 0, nil
 }
 
 // SetSessionVisible 更新平台会话是否出现在本地列表中。
@@ -578,7 +627,7 @@ func (s *ChatStore) ListSessions(ctx context.Context, userID int64, cookieID str
 	// rows、err 用于本次流程后续判断的rows、err
 	rows, err := s.DB.QueryContext(ctx, `SELECT cs.cookie_id,cs.chat_id,cs.buyer_id,cs.buyer_name,cs.buyer_avatar_url,
 		cs.item_id,cs.item_title,cs.item_image_url,cs.last_message,cs.last_message_at,cs.unread_count,
-		cs.account_role,cs.buyer_user_id,cs.seller_user_id,cs.role_item_id,cs.role_source
+		cs.account_role,cs.buyer_user_id,cs.seller_user_id,cs.role_item_id,cs.role_source,cs.auto_reply_mode
 		FROM chat_sessions cs JOIN cookies c ON c.id=cs.cookie_id
 		WHERE c.user_id=? AND cs.cookie_id=? AND cs.is_visible=? AND cs.user_hidden_at=0 ORDER BY cs.last_message_at DESC,cs.chat_id DESC LIMIT ?`, userID, cookieID, true, limit)
 	if err != nil {
@@ -593,7 +642,7 @@ func (s *ChatStore) ListSessions(ctx context.Context, userID int64, cookieID str
 		if // err 用于本次流程后续判断的err
 		err := rows.Scan(&row.CookieID, &row.ChatID, &row.BuyerID, &row.BuyerName, &row.BuyerAvatar,
 			&row.ItemID, &row.ItemTitle, &row.ItemImageURL, &row.LastMessage, &row.LastMessageAt, &row.UnreadCount,
-			&row.AccountRole, &row.BuyerUserID, &row.SellerUserID, &row.RoleItemID, &row.RoleSource); err != nil {
+			&row.AccountRole, &row.BuyerUserID, &row.SellerUserID, &row.RoleItemID, &row.RoleSource, &row.AutoReplyMode); err != nil {
 			return nil, err
 		}
 		result = append(result, row)
@@ -614,7 +663,7 @@ func (s *ChatStore) FindSession(ctx context.Context, userID int64, cookieID, cha
 		WHERE c.user_id=? AND cs.cookie_id=? AND cs.chat_id=? AND cs.is_visible=? AND cs.user_hidden_at=0`, userID, cookieID, chatID, true).
 		Scan(&session.CookieID, &session.ChatID, &session.BuyerID, &session.BuyerName, &session.BuyerAvatar,
 			&session.ItemID, &session.ItemTitle, &session.ItemImageURL, &session.LastMessage, &session.LastMessageAt, &session.UnreadCount,
-			&session.AccountRole, &session.BuyerUserID, &session.SellerUserID, &session.RoleItemID, &session.RoleSource)
+			&session.AccountRole, &session.BuyerUserID, &session.SellerUserID, &session.RoleItemID, &session.RoleSource, &session.AutoReplyMode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
