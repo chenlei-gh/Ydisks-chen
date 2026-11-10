@@ -21,8 +21,11 @@ func TestMultiDBChatSessionReplyModeAndClaim(t *testing.T) {
 
 			// 新会话及迁移后的旧会话均应以 auto 为安全默认值。
 			stored, err := target.store.Chats.FindSession(ctx, userID, accountID, session.ChatID)
-			if err != nil || stored.AutoReplyMode != "auto" {
-				t.Fatalf("initial mode=%q err=%v", stored.AutoReplyMode, err)
+			if err != nil {
+				t.Fatalf("find initial session: %v", err)
+			}
+			if stored.AutoReplyMode != "auto" {
+				t.Fatalf("initial mode=%q, want auto", stored.AutoReplyMode)
 			}
 			if err := target.store.Chats.SetAutoReplyMode(ctx, userID+1000, accountID, session.ChatID, "manual"); !errors.Is(err, ErrNotFound) {
 				t.Fatalf("foreign owner update err=%v, want ErrNotFound", err)
