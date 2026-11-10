@@ -272,6 +272,7 @@ func TestMigrate_UpgradesDatabaseWithMainChatVersions(t *testing.T) {
 	}
 	// legacyReplyMode 验证升级前已存在的会话通过 00061 迁移后默认保持自动回复。
 	var legacyReplyMode string
+	// err 保存升级前旧会话的默认模式读取结果。
 	if err := rawDB.QueryRow(`SELECT auto_reply_mode FROM chat_sessions WHERE cookie_id='role-upgrade-account' AND chat_id='role-upgrade-chat'`).Scan(&legacyReplyMode); err != nil || legacyReplyMode != "auto" {
 		t.Fatalf("legacy auto reply mode=%q err=%v", legacyReplyMode, err)
 	}
