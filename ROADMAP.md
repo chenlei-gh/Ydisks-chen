@@ -324,7 +324,7 @@
 - **可信会话校验**：适配器追加历史前从 chat_sessions 读取本地 item_id/buyer_id；客户端提交的 item_id 与本地会话不一致或会话不存在时不写入，避免污染其他商品上下文。
 - **上下文预算**：最多 10 条历史消息，单条最多 2000 rune；“历史 + 当前买家消息”最多 8000 rune，按最新消息优先保留完整消息。该上限是跨模型稳定的字符代理，不是精确 tokenizer token 计数；system prompt 不包含在此字符预算内。
 - **新增回归测试**：人工成功写入、失败/uncertain 不写入、AI 历史记录失败不触发发送重试、自动回复不重复记录、数据库历史落库与客户端伪造商品标识拒绝、历史条数/总 rune 预算与最近完整消息保留。
-- **验证状态**：最初 CI run [42766254430](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42766254430) 在中文注释检查失败，尚未进入 Go 测试；已按项目 commentlint 规则补齐新增代码和测试注释。最新 head 的 CI run `42766547781` 正在排队/等待执行，尚无测试通过结论；不合并。
+- **验证状态**：最初 CI run [42766254430](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42766254430) 在中文注释检查失败；随后 [42767002285](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42767002285) 暴露测试缺少 db import，修复后 [42767158474](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42767158474) 暴露测试文件 import 排序问题，均已修复。当前 head `17d5098cab873733661bd8503a92608ae15bbd3d` 的 CI run [42767288572](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42767288572)：格式、中文注释、架构、OpenAPI、文档一致性、go vet、golangci-lint 和 smoke 已通过；Go 定向测试仍在运行，尚无完整 Go job 通过结论；不合并。
 - **剩余边界**：AI 历史追加与 chat_messages 的 sent 状态不是同一事务；记录失败会留下告警但不阻断已成功发送。初期采用轻量 best-effort，后续根据真实失败证据决定是否需要持久化重试机制。摘要暂不增加额外模型调用，先用硬字符预算限制历史；摘要机制暂不标记完成。
 
 ### 2026-11-10 阶段 5.5 会话上下文二次审计与实现边界
