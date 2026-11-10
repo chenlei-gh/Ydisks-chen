@@ -61,7 +61,7 @@ func TestBoundAIConversationHistoryDoesNotPartiallyKeepOldMessage(t *testing.T) 
 func TestBuildSystemPrompt(t *testing.T) {
 	// got 用于本次流程后续判断的got
 	got := buildSystemPrompt("你是卖{item_title}的客服，价格{item_price}", "iPhone", 100, "手机", "", 0, 0, 3, 1, false, "bargain_only", true)
-	if !strings.Contains(got, "你是卖"iPhone"的客服，价格100.00") {
+	if !strings.Contains(got, "你是卖\\"iPhone\\"的客服，价格100.00") {
 		t.Fatalf("自定义 prompt 替换: got %q", got)
 	}
 	if !strings.Contains(got, "任一优惠上限为 0 时不得降价") || !strings.Contains(got, "当前砍价轮次 1") {
@@ -126,6 +126,7 @@ func TestPromptDataValuesCannotBreakOutOfProductContext(t *testing.T) {
 		t.Fatalf("提示词缺少不可覆盖的商品数据安全规则: %q", got)
 	}
 }
+
 // TestExtractExecutableOffer 验证内部报价标记不会发送给买家，且重复或非法标记不可执行。
 func TestExtractExecutableOffer(t *testing.T) {
 	// visible、price、ok 分别是买家可见文本、解析金额和可执行标记状态。
