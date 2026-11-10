@@ -390,6 +390,7 @@ func buildFullServicePrompt(customPrompts, itemTitle string, itemPrice float64, 
 
 // promptDataValue 将商品字段编码为 JSON 字符串，避免引号、换行和标签字符逃逸提示词数据边界。
 func promptDataValue(value string) string {
+	// encoded 保存 JSON 编码后的商品字段文本。
 	encoded, _ := json.Marshal(value)
 	return string(encoded)
 }
