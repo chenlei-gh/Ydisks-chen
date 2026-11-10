@@ -88,3 +88,66 @@ func TestMultiDBChatSessionReplyModeAndClaim(t *testing.T) {
 		})
 	}
 }
+
+// TestMultiDBChatSessionReplyModeClaimRace 验证人工接管更新与自动回复 claim 在数据库行级串行化。
+func TestMultiDBChatSessionReplyModeClaimRace(t *testing.T) {
+	// target 表示本轮需要验证的数据库方言及其独立测试存储。
+	for _, target := range allTestTargets(t) {
+		t.Run(target.name, func(t *testing.T) {
+			// ctx 为并发模式切换和 claim 操作提供统一上下文。
+			ctx := context.Background()
+			// userID 和 accountID 标识本轮并发测试创建的会话所有者。
+			userID, accountID := seedAccount(t, target.store)
+			// session 是两个数据库操作共同竞争的目标会话。
+			session := ChatSession{CookieID: accountID, ChatID: "reply-mode-race", BuyerID: "peer-1"}
+			// err 保存会话初始化写入结果。
+			if err := target.store.Chats.UpsertSession(ctx, session); err != nil {
+				t.Fatalf("upsert race session: %v", err)
+			}
+
+			// start 同时释放两个操作，制造模式切换与 claim 的真实竞争。
+			start := make(chan struct{})
+			// claimResult 接收自动回复 claim 的结果与错误。
+			claimResult := make(chan struct {
+				claimed bool
+				err     error
+			}, 1)
+			// modeResult 接收人工接管更新的错误。
+			modeResult := make(chan error, 1)
+			go func() {
+				<-start
+				// claimed 和 claimErr 描述本次并发自动回复 claim 的提交结果。
+				claimed, claimErr := target.store.Chats.ClaimAutoReply(ctx, accountID, session.ChatID)
+				claimResult <- struct {
+					claimed bool
+					err     error
+				}{claimed: claimed, err: claimErr}
+			}()
+			go func() {
+				<-start
+				// modeErr 保存人工接管更新的提交结果。
+				modeResult <- target.store.Chats.SetAutoReplyMode(ctx, userID, accountID, session.ChatID, "manual")
+			}()
+			close(start)
+
+			// claim 保存并发自动回复操作的最终结果。
+			claim := <-claimResult
+			if claim.err != nil {
+				t.Fatalf("claim during mode race: %v", claim.err)
+			}
+			// modeErr 保存并发人工接管操作的最终结果。
+			if modeErr := <-modeResult; modeErr != nil {
+				t.Fatalf("manual mode during claim race: %v", modeErr)
+			}
+			// stored 和 err 用于确认两个竞争操作结束后人工模式最终持久化。
+			stored, err := target.store.Chats.FindSession(ctx, userID, accountID, session.ChatID)
+			if err != nil {
+				t.Fatalf("find session after mode race: %v", err)
+			}
+			if stored.AutoReplyMode != "manual" {
+				t.Fatalf("final mode=%q, want manual (claim won race: %v)", stored.AutoReplyMode, claim.claimed)
+			}
+			// claim.claimed 为 true 表示 claim 先提交、该回复可完成；false 表示人工接管先提交并阻止回复。
+		})
+	}
+}
