@@ -177,8 +177,7 @@ func (s *ChatStore) FindChatIDsByBuyerAndItem(ctx context.Context, cookieID, buy
 	return chatIDs, nil
 }
 
-
- // SetAutoReplyMode 仅允许会话所属用户切换可见会话的自动回复模式。
+// SetAutoReplyMode 仅允许会话所属用户切换可见会话的自动回复模式。
 // reply_gate_version 在同一 UPDATE 中递增，使切换操作与自动回复 claim 在数据库行级串行化。
 func (s *ChatStore) SetAutoReplyMode(ctx context.Context, userID int64, cookieID, chatID, mode string) error {
 	if s == nil || s.DB == nil || userID <= 0 || strings.TrimSpace(cookieID) == "" || strings.TrimSpace(chatID) == "" {
