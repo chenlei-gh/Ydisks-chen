@@ -5,7 +5,7 @@
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](frontend/package.json)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](compose.yml)
-[![正式发布](https://github.com/Christ9038/Ydisks-Xianyu-Helper/actions/workflows/release.yml/badge.svg)](https://github.com/Christ9038/Ydisks-Xianyu-Helper/actions/workflows/release.yml)
+[![正式发布](https://github.com/chenlei-gh/Ydisks-chen/actions/workflows/release.yml/badge.svg)](https://github.com/chenlei-gh/Ydisks-chen/actions/workflows/release.yml)
 
 [English README](README.md) · 中文文档 · [中文 Wiki](docs/wiki/Home.zh-CN.md) · [English Wiki](docs/wiki/Home.md)
 
@@ -41,18 +41,6 @@ Ydisks闲鱼助手是一个面向闲鱼卖家的自托管管理系统。它将�
 扫码登录、人脸验证流程、消息连接、凭证更新和绝大部分业务逻辑均由 Go 客户端完成。
 使用 Chromium 处理必须依赖浏览器环境的相关功能。
 
-### 与 Ydisks 网盘拉新助手协同使用
-
-如果你通过网盘资料、教程包或数字资源做闲鱼推广，推荐搭配
-[Ydisks 网盘拉新助手](https://www.ydisks.com) 使用：先为不同商品、渠道或推广账号
-创建独立短链，再在 Ydisks 控制台查看短链与目标页面的 PV、UV、趋势、排行及渠道/账号报表。
-这样，Ydisks 负责识别“链接从哪里带来访问与转化线索”，Ydisks闲鱼助手负责承接账号消息、
-订单和自动发货，帮助你把投放复盘与日常交付放进一套更清晰的运营流程。
-
-Ydisks 支持管理渠道、推广账号、原始链接、推广短链与域名，适用于网盘拉新和推广投放场景；
-可从 [Ydisks 网盘拉新助手使用文档](https://docs.ydisks.com/guide/quick-start) 开始创建推广链接并查看数据。
-
-
 ### 适用场景
 
 - 多个闲鱼账号的统一在线状态与消息管理
@@ -60,10 +48,6 @@ Ydisks 支持管理渠道、推广账号、原始链接、推广短链与域名�
 - 付款后发货、分阶段砍价免拼、评价赠品、超时求评价等自动化流程
 - 商品与订单同步、单商品单规格/多规格发布、规格图片与主图排序，以及支持逐行/默认类目、自动识别和最终兜底的表格批量铺货
 - 接入 OpenAI 兼容接口实现可控的 AI 客服回复，并可在后台测试完整连接链路
-
-### 交流群
-
-![Ydisks闲鱼助TG](https://raw.githubusercontent.com/Christ9038/Ydisks-Xianyu-Helper/main/docs/img/telegram.jpg)
 
 ## 功能特性
 
@@ -113,12 +97,12 @@ flowchart LR
 
 ## 页面预览
 
-![Ydisks闲鱼助手预览](https://raw.githubusercontent.com/Christ9038/Ydisks-Xianyu-Helper/main/docs/img/preview_account.png)
+![Ydisks闲鱼助手预览](https://raw.githubusercontent.com/chenlei-gh/Ydisks-chen/main/docs/img/preview_account.png)
 
-![Ydisks闲鱼助手预览](https://raw.githubusercontent.com/Christ9038/Ydisks-Xianyu-Helper/main/docs/img/preview_im.png)
+![Ydisks闲鱼助手预览](https://raw.githubusercontent.com/chenlei-gh/Ydisks-chen/main/docs/img/preview_im.png)
 
 
-![Ydisks闲鱼助手预览](https://raw.githubusercontent.com/Christ9038/Ydisks-Xianyu-Helper/main/docs/img/preview_auto.png)
+![Ydisks闲鱼助手预览](https://raw.githubusercontent.com/chenlei-gh/Ydisks-chen/main/docs/img/preview_auto.png)
 
 
 ## 快速开始
@@ -131,7 +115,7 @@ Docker Desktop，并使用 Docker Compose v2。
 Docker 部署会使用容器内 Chromium 的原生 Linux 指纹执行官网静默续期；续期是否成功由闲鱼响应决定，不会因宿主系统是 Linux 而跳过。
 
 ```bash
-git clone https://github.com/Christ9038/Ydisks-Xianyu-Helper.git
+git clone https://github.com/chenlei-gh/Ydisks-chen.git
 cd Ydisks-Xianyu-Helper
 cp .env.example .env
 ```
@@ -165,7 +149,7 @@ docker compose up -d
 `XIANYU_ADMIN_PASSWORD` 登录。
 
 > GHCR 镜像公开时可以匿名拉取。若镜像仍为私有，请先执行
-> `docker login ghcr.io -u Christ9038`，并使用具有 `read:packages` 权限的
+> `docker login ghcr.io -u <github-username>`，并使用具有 `read:packages` 权限的
 > Personal Access Token 登录。
 
 ### 方式二：从源码运行
@@ -180,7 +164,7 @@ docker compose up -d
 构建前端：
 
 ```bash
-git clone https://github.com/Christ9038/Ydisks-Xianyu-Helper.git
+git clone https://github.com/chenlei-gh/Ydisks-chen.git
 cd Ydisks-Xianyu-Helper
 npm --prefix frontend ci
 npm --prefix frontend run build
@@ -521,7 +505,7 @@ docker compose up -d
 ### 完整部署步骤
 
 ```bash
-git clone https://github.com/Christ9038/Ydisks-Xianyu-Helper.git
+git clone https://github.com/chenlei-gh/Ydisks-chen.git
 cd Ydisks-Xianyu-Helper
 cp .env.example .env
 ```
@@ -775,11 +759,10 @@ go run ./cmd/server -init-admin -db data/xianyu_data.db -admin-password '新密�
 
 ## 开源协议
 
-本项目采用 [Apache License 2.0](LICENSE) 开源，版权所有 © 2026 Christ9038。
+本项目采用 [Apache License 2.0](LICENSE) 开源。
 
-完整许可条款见 [LICENSE](LICENSE)，
-原项目名称、版权与署名声明见 [NOTICE](NOTICE)。分发原始或衍生作品时，请保留这两个
-文件中的适用声明，并在修改过的文件中显著标注修改。
+分发原始或衍生作品时，请保留 [LICENSE](LICENSE) 与 [NOTICE](NOTICE) 中适用的许可和版权声明，
+并在修改过的文件中显著标注修改。
 
 ## 免责声明
 
@@ -788,18 +771,3 @@ go run ./cmd/server -init-admin -db data/xianyu_data.db -admin-password '新密�
 其他直接与间接损失，应由使用者自行承担。请勿将本项目用于垃圾消息、欺诈、未授权
 访问、规避平台限制或任何违法违规活动。
 
-## 社区支持
-
-本项目受到 LINUX DO 社区的交流与反馈支持：
-
-[访问 LINUX DO 社区](https://linux.do/)
-
-### 赞助项目
-
-如果本项目对你有帮助，欢迎通过 BNB Smart Chain（BSC，BEP-20）网络的 USDT 或 USDC 支持项目持续开发：
-
-`0xc7b77931af39e292bfcadef6228a067ad5a69e3a`
-
-![BNB Smart Chain（BSC，BEP-20）网络 USDT/USDC 赞助二维码](docs/img/sponsor-bsc.png)
-
-USDT 和 USDC 均请仅通过 BNB Smart Chain（BEP-20）网络转账；使用其他网络可能导致资金无法找回。
