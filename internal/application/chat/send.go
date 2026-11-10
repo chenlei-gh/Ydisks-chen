@@ -92,12 +92,13 @@ type ReplyResult struct {
 	TextSent bool
 }
 
-// OutgoingRepository 定义发送用例需要的本地消息写入能力。
+// ManualAIContextRecorder 定义把已确认的人工文字回复追加到 AI 历史的可选能力。
 type ManualAIContextRecorder interface {
 	// RecordManualAIContext 记录已由平台确认发送成功的人工文字回复；记录失败不得改变远端发送结果。
 	RecordManualAIContext(ctx context.Context, session Session, text string) error
 }
 
+// OutgoingRepository 定义发送用例需要的本地消息写入能力。
 type OutgoingRepository interface {
 	// CreateOutgoing 创建状态为 sending 的文字消息并返回幂等键。
 	CreateOutgoing(ctx context.Context, session Session, text string) (Message, error)
@@ -399,8 +400,11 @@ func (s *Service) sendText(ctx context.Context, input OutgoingInput, recordManua
 	}
 	// 平台已明确返回成功后，人工文字回复才追加到 AI 历史；记录失败只告警，绝不把成功发送变成可重试错误。
 	if recordManualContext && session.ItemID != "" && session.PeerUserID != "" {
+		// recorder、ok 表示外发仓储是否支持人工 AI 上下文记录。
 		if recorder, ok := s.outgoing.(ManualAIContextRecorder); ok {
+			// recordCtx、recordCancel 为上下文追加提供独立的有界窗口。
 			recordCtx, recordCancel := outgoingStatusContext(ctx)
+			// recordErr 保存 AI 历史追加结果；失败只告警，不改变平台已确认发送状态。
 			if recordErr := recorder.RecordManualAIContext(recordCtx, session, text); recordErr != nil {
 				slog.Default().Warn("记录人工聊天回复到 AI 上下文失败", "account", session.AccountID, "chat_id", session.ChatID, "error", recordErr)
 			}
