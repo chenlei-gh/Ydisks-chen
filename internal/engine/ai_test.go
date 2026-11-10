@@ -13,40 +13,49 @@ import (
 	"xianyu-go/internal/db"
 )
 
-// TestBuildSystemPrompt 自定义 prompt 替换变量，且始终追加价格与轮次安全约束。
+// TestBoundAIConversationHistoryRespectsMessageAndTotalBudgets 验证历史条数和总 rune 预算均生效。
 func TestBoundAIConversationHistoryRespectsMessageAndTotalBudgets(t *testing.T) {
+	// history 保存超过条数上限的有序对话样本。
 	history := make([]db.AIConversationMessage, 12)
+	// i 遍历历史样本并写入可区分的消息内容。
 	for i := range history {
 		history[i] = db.AIConversationMessage{Role: "user", Content: fmt.Sprintf("m%d", i)}
 	}
+	// got 保存应用条数上限后的历史窗口。
 	got := boundAIConversationHistory(history, "current")
 	if len(got) != aiContextMaxMessages || got[0].Content != "m2" || got[len(got)-1].Content != "m11" {
 		t.Fatalf("message window=%+v", got)
 	}
 
+	// large 保存超过总预算的四条长消息。
 	large := []db.AIConversationMessage{
 		{Role: "user", Content: strings.Repeat("a", 2000)},
 		{Role: "assistant", Content: strings.Repeat("b", 2000)},
 		{Role: "user", Content: strings.Repeat("c", 2000)},
 		{Role: "assistant", Content: strings.Repeat("d", 2000)},
 	}
+	// got 保存保留最近完整消息后的预算结果。
 	got = boundAIConversationHistory(large, strings.Repeat("买", 2000))
 	if len(got) != 3 || got[0].Content[0] != 'b' || got[2].Content[0] != 'd' {
 		t.Fatalf("total budget should retain newest complete messages, got count=%d", len(got))
 	}
 }
 
+// TestBoundAIConversationHistoryDoesNotPartiallyKeepOldMessage 验证超预算时不保留被截成半条的旧消息。
 func TestBoundAIConversationHistoryDoesNotPartiallyKeepOldMessage(t *testing.T) {
+	// history 保存一条较旧消息和一条较新的完整消息。
 	history := []db.AIConversationMessage{
 		{Role: "user", Content: strings.Repeat("旧", 1500)},
 		{Role: "assistant", Content: strings.Repeat("新", 2000)},
 	}
+	// got 保存只保留预算内最近完整消息的结果。
 	got := boundAIConversationHistory(history, strings.Repeat("今", 5000))
 	if len(got) != 1 || got[0].Content != strings.Repeat("新", 2000) {
 		t.Fatalf("history must keep recent complete message only, got=%+v", got)
 	}
 }
 
+// TestBuildSystemPrompt 自定义 prompt 替换变量，且始终追加价格与轮次安全约束。
 func TestBuildSystemPrompt(t *testing.T) {
 	// got 用于本次流程后续判断的got
 	got := buildSystemPrompt("你是卖{item_title}的客服，价格{item_price}", "iPhone", 100, "手机", "", 0, 0, 3, 1, false, "bargain_only", true)
