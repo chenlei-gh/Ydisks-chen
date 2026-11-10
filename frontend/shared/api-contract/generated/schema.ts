@@ -2683,7 +2683,7 @@ export interface components {
             max_discount_percent: number;
             max_discount_amount: number;
             max_bargain_rounds: number;
-            max_completion_tokens: number;
+            max_completion_tokens?: number;
             custom_prompts: string;
             /** @enum {string} */
             ai_mode?: "bargain_only" | "full_service";
