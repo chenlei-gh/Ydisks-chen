@@ -47,7 +47,6 @@ func TestChatSessionReplyModeEndpoint(t *testing.T) {
 		t.Fatalf("automatic claim during manual mode=%v err=%v", claimed, claimErr)
 	}
 
-
 	// 会话列表 DTO 必须返回持久化模式，供聊天页面按钮准确显示当前状态。
 	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/chat/sessions?account_id="+accountID, nil)
 	listRequest.AddCookie(cookie)
