@@ -116,15 +116,12 @@ func (r chatOutgoingRepository) RecordManualAIContext(ctx context.Context, sessi
 	if sessionErr != nil {
 		return sessionErr
 	}
-	// 本地商品标识不一致时拒绝写入，避免客户端参数污染其他商品的 AI 历史。
-	if storedSession == nil || storedSession.ItemID == "" || storedSession.ItemID != session.ItemID {
+	// 本地商品或会话对端标识不一致时拒绝写入，避免客户端参数污染其他 AI 会话。
+	if storedSession == nil || storedSession.ItemID == "" || storedSession.ItemID != session.ItemID || storedSession.BuyerID == "" || storedSession.BuyerID != session.PeerUserID {
 		return nil
 	}
-	// buyerID 使用本地会话保存的买家标识；旧会话缺失时才回退到已通过发送入口的对端标识。
+	// buyerID 只使用通过账号归属查询确认的本地会话对端标识。
 	buyerID := storedSession.BuyerID
-	if buyerID == "" {
-		buyerID = session.PeerUserID
-	}
 	return r.store.AIReply.AddConversation(ctx, session.AccountID, session.ChatID, buyerID, storedSession.ItemID, db.AIConversationMessage{
 		Role: "assistant", Content: text, Intent: "manual_reply",
 	})
