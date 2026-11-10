@@ -2,6 +2,7 @@ package server
 
 import chatapp "xianyu-go/internal/application/chat"
 
+// chatSessionDTO 是聊天会话 HTTP 响应使用的具名 DTO。
 type chatSessionDTO struct {
 	// AccountID 是账号稳定标识。
 	AccountID string `json:"account_id"`
