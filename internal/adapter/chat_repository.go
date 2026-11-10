@@ -102,7 +102,7 @@ func (r chatRepository) ListSessionPage(ctx context.Context, userID int64, accou
 		sessions = append(sessions, chatapp.Session{
 			AccountID: row.CookieID, ChatID: row.ChatID, PeerUserID: row.BuyerID,
 			PeerName: row.BuyerName, PeerAvatar: row.BuyerAvatar, AccountRole: row.AccountRole,
-			BuyerUserID: row.BuyerUserID, SellerUserID: row.SellerUserID, RoleItemID: row.RoleItemID, RoleSource: row.RoleSource, ItemID: row.ItemID,
+			BuyerUserID: row.BuyerUserID, SellerUserID: row.SellerUserID, RoleItemID: row.RoleItemID, RoleSource: row.RoleSource, AutoReplyMode: row.AutoReplyMode, ItemID: row.ItemID,
 			ItemTitle: row.ItemTitle, ItemImageURL: row.ItemImageURL, LastMessage: row.LastMessage, LastMessageAt: row.LastMessageAt,
 			UnreadCount: row.UnreadCount,
 		})
