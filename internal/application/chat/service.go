@@ -526,7 +526,6 @@ func (s *Service) MarkRead(ctx context.Context, userID int64, accountID, chatID 
 	return repository.MarkRead(ctx, userID, accountID, chatID)
 }
 
-
 // SetAutoReplyMode 切换指定会话的自动回复模式；数据库层以条件 UPDATE 与自动回复 claim 竞争。
 func (s *Service) SetAutoReplyMode(ctx context.Context, userID int64, accountID, chatID, mode string) error {
 	accountID, chatID = strings.TrimSpace(accountID), strings.TrimSpace(chatID)
