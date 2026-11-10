@@ -88,6 +88,7 @@ func (reporter chatReadReporter) ReportRead(ctx context.Context, accountID, chat
 
 // NewChatOutgoingRepository 创建聊天外发消息的领域适配器。
 func NewChatOutgoingRepository(service *domainchat.Service, stores ...*db.Store) chatapp.OutgoingRepository {
+	// store 保存可选注入的数据库聚合入口。
 	var store *db.Store
 	if len(stores) > 0 {
 		store = stores[0]
@@ -95,6 +96,7 @@ func NewChatOutgoingRepository(service *domainchat.Service, stores ...*db.Store)
 	return chatOutgoingRepository{service: service, store: store}
 }
 
+// RecordManualAIContext 只把与本地会话商品一致的已确认人工回复追加到 AI 历史。
 func (r chatOutgoingRepository) RecordManualAIContext(ctx context.Context, session chatapp.Session, text string) error {
 	if r.store == nil || r.store.AIReply == nil || r.store.DB == nil {
 		return chatapp.ErrUnavailable
@@ -104,6 +106,7 @@ func (r chatOutgoingRepository) RecordManualAIContext(ctx context.Context, sessi
 	}
 	// itemID 与 buyerID 必须来自本地会话事实，不能信任手动发送请求中可由客户端填写的商品标识。
 	var itemID, buyerID string
+	// lookupErr 保存读取本地会话商品与买家事实的结果。
 	lookupErr := r.store.DB.QueryRowContext(ctx, `SELECT item_id,buyer_id FROM chat_sessions WHERE cookie_id=? AND chat_id=?`, session.AccountID, session.ChatID).Scan(&itemID, &buyerID)
 	if errors.Is(lookupErr, sql.ErrNoRows) || (lookupErr == nil && (itemID == "" || itemID != session.ItemID)) {
 		return nil
