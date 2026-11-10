@@ -186,6 +186,7 @@ func (s *ChatStore) SetAutoReplyMode(ctx context.Context, userID int64, cookieID
 	if mode != "auto" && mode != "manual" {
 		return errors.New("会话自动回复模式无效")
 	}
+	// result 和 err 保存按用户归属条件更新会话模式的数据库执行结果。
 	result, err := s.DB.ExecContext(ctx, `UPDATE chat_sessions SET auto_reply_mode=?,reply_gate_version=reply_gate_version+1,updated_at=?
 		WHERE cookie_id=? AND chat_id=? AND is_visible=? AND user_hidden_at=0
 		AND EXISTS (SELECT 1 FROM cookies c WHERE c.id=chat_sessions.cookie_id AND c.user_id=?)`,
