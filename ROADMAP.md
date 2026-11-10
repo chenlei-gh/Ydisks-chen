@@ -103,10 +103,10 @@
 
 ### 阶段 3：统一外部操作状态与执行权（按审计结果决定是否需要抽象）
 
-- [ ] 3.1 盘点发货、消息发送、商品发布等外部操作是否已有可复用的状态模型。
-- [ ] 3.2 对照以下语义检查现有模型是否表达充分：`not_started`、`started`、`remote_confirmed`、`local_confirmed`、`unknown`。
-- [ ] 3.3 只有当多个业务域确实存在重复且不一致的状态处理时，才考虑提取共享协调能力；优先复用现有 DB / application 层，不为抽象而抽象。
-- [ ] 3.4 明确 lease token、attempt/generation、过期接管和旧 worker fencing 的责任边界。
+- [x] 3.1 盘点发货、消息发送、商品发布等外部操作状态模型（证据见下方 2026-11-10 阶段 3 状态模型审计）。
+- [x] 3.2 对照 not_started / started / remote_confirmed / local_confirmed / unknown 语义完成差异审计；各业务域不强行统一状态名称，缺失语义按业务边界记录。
+- [x] 3.3 完成共享抽象必要性评估：各域的外部副作用和恢复凭证不同，当前没有证据支持新增通用协调服务；继续复用各域现有 DB / application 层。
+- [x] 3.4 明确各域执行权责任边界：自动发货使用 attempt_count + 有效租约 fencing；批量发布使用 worker_token + 批次租约 fencing；单商品发布使用 operation_id + 条件状态迁移，不使用 lease；聊天发送为同步发送状态，不具备 worker lease。
 - [x] 3.5 为状态迁移、重复回调、超时和本地提交失败建立回归测试（已有重复 WS 事件入口处理测试，见下方 2026-11-10 补充证据；PR #9/#13/#16 的超时、checkpoint 持久化失败与租约接管测试及 CI 证据已记录）。
 
 **验收标准**：每个状态都有明确进入条件、允许的后继状态、恢复策略和可验证持久化证据；不引入无法证明必要性的新服务层。
@@ -316,6 +316,23 @@
 - **4.6 完成（自动化测试范围）**：批量部分成功/计数与失败行重置、worker claim 互斥和租约接管、未知远端结果隔离、超时及远端成功后 checkpoint 写入失败均有回归测试。PR #8 run [42546788164](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42546788164) 的 Go/React/多数据库/冒烟 4/4 通过；PR #13 run [42624548385](https://github.com/chenlei-gh/Ydisks-chen/actions/runs/42624548385) 通过。故障注入主要基于 SQLite；PR #7/#9 的多数据库结果另行记录，不将其扩大解释为批量全路径三方言验证。
 - **边界**：上述结论只覆盖本地自动化测试与 CI，不代表真实闲鱼商品发布、图片上传或远端幂等行为已验证；真实账号/订单 E2E 继续暂停。
 
+
+### 2026-11-10 阶段 3 外部操作状态模型与执行权审计
+
+- **3.1 状态模型盘点**：
+  - 自动发货/补发：以 automation run、action cursor/checkpoint、action_started、attempt_count、lease_expires_at 和 needs_review/unknown 隔离共同表达执行阶段；执行权与外部副作用检查点分离。
+  - 单商品发布：SinglePublishOperations 使用 prepared → started → remote_confirmed → local_confirmed；started 在最终创建请求发出前写入，远端确认后记录商品标识/响应，本地 Upsert 成功后收口；started 的结果不明可转 unknown 并禁止自动再次创建。
+  - 批量商品发布：批次与行分别持久化状态；行在远端调用前标记 remote_started，远端成功后先保存 item_id/item_url/raw_json 检查点，再完成 success；失租恢复时，有远端开始标记但无商品 ID 的行隔离为 uncertain_remote，已保存商品 ID 的行可恢复本地收口。
+  - 聊天消息发送：本地消息从 sending 进入 sent / failed / uncertain；平台已确认但本地状态保存失败会返回 ErrStatusSave，未知结果不会被当作失败重发。它是同步消息投递状态，不是持久化 worker lease。
+- **3.2 语义差异**：not_started 在不同域由无操作记录/ prepared / pending 表达；started 由 automation action_started、单商品 started、批量 remote_started、聊天 sending 表达；remote_confirmed/local_confirmed 在单商品发布中有显式状态，在批量发布中通过远端结果检查点与本地 success 收口表达，在自动发货中通过动作证明/检查点与运行收口表达；unknown/needs_review 用于隔离可能已发生的远端副作用。聊天消息只有 uncertain，不能据此推断已确认远端成功。各域语义可映射比较，但不应把字段和状态名称强制统一。
+- **3.3 抽象决策**：不提取通用 ExternalOperationCoordinator。自动发货依赖订单/动作快照和 attempt fencing；批量发布依赖批次 worker token、逐行检查点及图片目录；单商品发布依赖客户端 operation ID 与请求指纹；聊天发送依赖平台消息键和同步发送结果。若强行统一，会把不同恢复凭证压成通用状态而丢失业务事实。当前复用各域 DB 条件更新和 application/adapter 边界即可。
+- **3.4 执行权边界**：
+  - 自动发货：run attempt_count 是执行代次；续租条件同时检查 run ID、attempt、running、action_started 和租约未过期。租约过期不能复活；续租失败取消动作上下文；旧 attempt 无法续租/继续副作用。
+  - 批量发布：worker_token 是批次与行操作的 fencing 身份；claim/renew/finalize/row checkpoint 均要求当前 token。接管时替换 token，旧 worker 的后续写入因 token 不匹配而失败。此域没有 attempt_count，不能把 token 与自动发货代次混为同一字段。
+  - 单商品发布：operation_id 唯一约束防止同一客户端意图重复创建，状态迁移带前置状态条件；它不是租约，不能防止用户为相同内容主动生成另一个 operation_id。
+  - 聊天发送：没有后台 worker 租约或 attempt fencing；通过消息键和 sending/sent/failed/uncertain 记录单次同步投递，不能宣称跨进程 exactly-once。
+- **证据路径**：internal/automation/run_lease.go、internal/db/automation_execution_lease.go、internal/db/item_publish_batches_worker.go、internal/db/single_publish_operations.go、internal/application/chat/send.go、internal/db/chat.go，以及路线图阶段 2、4.7 和 PR #16 的既有测试记录。
+- **结论**：3.1–3.4 完成；不新增抽象、不改业务代码。此结论仅表示本地状态/执行权模型审计完成，不代表真实闲鱼平台 exactly-once。
 
 ### 2026-11-10 阶段 3.5 重复 WS 事件覆盖复核
 
