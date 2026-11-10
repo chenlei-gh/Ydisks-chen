@@ -157,15 +157,35 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 	}
 	messages = append(messages, currentMessage)
 
+	// requestStartedAt 记录模型请求开始时间，用于统计实际调用耗时。
+	requestStartedAt := time.Now()
 	// resp、err 用于本次流程后续判断的resp、err
 	resp, err := client.CreateChatCompletion(aiCtx, openai.ChatCompletionRequest{
 		Model:       requestModel,
 		Messages:    messages,
 		Temperature: 0.7,
 	})
+	// taskType 区分普通文本请求与实际附带买家图片的视觉请求。
+	taskType := "text"
+	if imageAttached {
+		taskType = "vision"
+	}
+	// usageRecord 保存本次模型调用的非内容用量元数据。
+	usageRecord := db.AIUsageRecord{
+		CookieID: a.cookieID, Provider: aiProviderName(aiCfg.BaseURL), Model: requestModel,
+		TaskType: taskType, DurationMS: time.Since(requestStartedAt).Milliseconds(),
+	}
 	if err != nil {
+		usageRecord.Status = "failed"
+		usageRecord.ErrorKind = aiUsageErrorKind(aiCtx, err)
+		a.recordAIUsage(ctx, usageRecord)
 		return nil, fmt.Errorf("AI 调用失败: %w", err)
 	}
+	usageRecord.Status = "success"
+	usageRecord.PromptTokens = resp.Usage.PromptTokens
+	usageRecord.CompletionTokens = resp.Usage.CompletionTokens
+	usageRecord.TotalTokens = resp.Usage.TotalTokens
+	a.recordAIUsage(ctx, usageRecord)
 	if len(resp.Choices) == 0 {
 		return nil, nil
 	}
