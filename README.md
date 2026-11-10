@@ -109,7 +109,7 @@ Compose v2 are required.
 
 ~~~bash
 git clone https://github.com/chenlei-gh/Ydisks-chen.git
-cd Ydisks-Xianyu-Helper
+cd Ydisks-chen
 cp .env.example .env
 ~~~
 
@@ -150,7 +150,7 @@ Requirements are Go 1.26.4 or compatible, Node.js 24 with npm, Chromium system d
 
 ~~~bash
 git clone https://github.com/chenlei-gh/Ydisks-chen.git
-cd Ydisks-Xianyu-Helper
+cd Ydisks-chen
 npm --prefix frontend ci
 npm --prefix frontend run build
 go run ./cmd/server -db data/xianyu_data.db -addr 127.0.0.1:59188
