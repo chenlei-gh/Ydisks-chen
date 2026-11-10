@@ -15,7 +15,8 @@ CREATE TABLE ai_usage_records (
     usage_date CHAR(10) NOT NULL,
     created_at_unix BIGINT NOT NULL,
     INDEX idx_ai_usage_cookie_date (cookie_id, usage_date),
-    INDEX idx_ai_usage_date (usage_date)
+    INDEX idx_ai_usage_date (usage_date),
+    CONSTRAINT fk_ai_usage_cookie FOREIGN KEY (cookie_id) REFERENCES cookies(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- +goose Down
