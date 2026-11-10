@@ -3341,7 +3341,7 @@ export interface components {
             /** @enum {string} */
             account_role: "seller" | "buyer" | "unknown";
             /** @enum {string} */
-            auto_reply_mode: "auto" | "manual";
+            auto_reply_mode?: "auto" | "manual";
             buyer_user_id: string;
             seller_user_id: string;
             role_item_id: string;
