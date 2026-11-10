@@ -314,6 +314,7 @@ func TestReplyServiceManualHandoffBlocksDelivery(t *testing.T) {
 	if err := store.Chats.SetAutoReplyMode(ctx, admin.ID, "cid", session.ChatID, "auto"); err != nil {
 		t.Fatal(err)
 	}
+	// err 保存恢复自动模式后再次处理消息的结果。
 	if err := service.Handle(ctx, chatMsg("你好", "item1", session.ChatID)); err != nil {
 		t.Fatal(err)
 	}
