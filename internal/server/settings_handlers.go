@@ -43,7 +43,7 @@ type aiReplySettingsUpdateRequest struct {
 	// MaxBargainRounds 是自动砍价允许的最大轮次。
 	MaxBargainRounds int `json:"max_bargain_rounds"`
 	// MaxCompletionTokens 是账号可选的最大输出 Token 数，0 表示不设置应用层上限。
-	MaxCompletionTokens int `json:"max_completion_tokens"`
+	MaxCompletionTokens *int `json:"max_completion_tokens"`
 	// CustomPrompts 是账号专用的补充提示词或客服规则。
 	CustomPrompts string `json:"custom_prompts"`
 	// AIMode 是 AI 工作模式：bargain_only 或 full_service。
@@ -412,13 +412,22 @@ func (s *Server) setAIReply(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "未授权访问")
 		return
 	}
-	// ownershipErr 保存账号不存在、跨用户或数据库归属查询失败的结果；未配置 AI 设置不是账号错误。
-	if _, ownershipErr := s.settingsApplication().GetAIReply(r.Context(), sess.UserID, cid); ownershipErr != nil && !errors.Is(ownershipErr, settingsapp.ErrConfigNotFound) {
+	// existingSettings 保存已存在的账号 AI 设置；旧客户端未提交新字段时需要保留原值。
+	existingSettings, ownershipErr := s.settingsApplication().GetAIReply(r.Context(), sess.UserID, cid)
+	if ownershipErr != nil && !errors.Is(ownershipErr, settingsapp.ErrConfigNotFound) {
 		if writeSettingsAccountError(w, ownershipErr) {
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, "查询失败")
 		return
+	}
+	// maxCompletionTokens 默认沿用已有配置；新账号首次保存时默认不限制。
+	maxCompletionTokens := existingSettings.MaxCompletionTokens
+	if errors.Is(ownershipErr, settingsapp.ErrConfigNotFound) {
+		maxCompletionTokens = 0
+	}
+	if req.MaxCompletionTokens != nil {
+		maxCompletionTokens = *req.MaxCompletionTokens
 	}
 	if req.MaxDiscountPercent < 0 || req.MaxDiscountPercent > 100 {
 		writeErr(w, http.StatusBadRequest, "最大折扣比例必须在 0 到 100 之间")
@@ -432,7 +441,7 @@ func (s *Server) setAIReply(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "最大砍价轮次必须在 1 到 10 之间")
 		return
 	}
-	if req.MaxCompletionTokens < 0 {
+	if maxCompletionTokens < 0 {
 		writeErr(w, http.StatusBadRequest, "最大输出 Token 数不能小于 0")
 		return
 	}
@@ -449,7 +458,7 @@ func (s *Server) setAIReply(w http.ResponseWriter, r *http.Request) {
 	err := s.settingsApplication().UpsertAIReply(r.Context(), sess.UserID, cid, settingsapp.AIReplySettings{
 		CookieID: cid, AIEnabled: req.AIEnabled, AutoAdjustPriceEnabled: req.AutoAdjustPriceEnabled, MaxDiscountPercent: req.MaxDiscountPercent,
 		MaxDiscountAmount: req.MaxDiscountAmount, MaxBargainRounds: req.MaxBargainRounds,
-		MaxCompletionTokens: req.MaxCompletionTokens, CustomPrompts: req.CustomPrompts, AIMode: req.AIMode,
+		MaxCompletionTokens: maxCompletionTokens, CustomPrompts: req.CustomPrompts, AIMode: req.AIMode,
 	})
 	if err != nil {
 		if errors.Is(err, settingsapp.ErrPricingModeConflict) {
