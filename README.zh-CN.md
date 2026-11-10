@@ -116,7 +116,7 @@ Docker 部署会使用容器内 Chromium 的原生 Linux 指纹执行官网静�
 
 ```bash
 git clone https://github.com/chenlei-gh/Ydisks-chen.git
-cd Ydisks-Xianyu-Helper
+cd Ydisks-chen
 cp .env.example .env
 ```
 
@@ -165,7 +165,7 @@ docker compose up -d
 
 ```bash
 git clone https://github.com/chenlei-gh/Ydisks-chen.git
-cd Ydisks-Xianyu-Helper
+cd Ydisks-chen
 npm --prefix frontend ci
 npm --prefix frontend run build
 ```
@@ -506,7 +506,7 @@ docker compose up -d
 
 ```bash
 git clone https://github.com/chenlei-gh/Ydisks-chen.git
-cd Ydisks-Xianyu-Helper
+cd Ydisks-chen
 cp .env.example .env
 ```
 
