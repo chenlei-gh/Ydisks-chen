@@ -194,6 +194,8 @@ func (s *ChatStore) SetAutoReplyMode(ctx context.Context, userID int64, cookieID
 	if err != nil {
 		return err
 	}
+	// affected 和 err 用于确认数据库条件更新是否命中目标会话。
+	// affected 和 err 用于判断自动回复 claim 是否成功提交。
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return err
@@ -224,6 +226,7 @@ func (s *ChatStore) ClaimAutoReply(ctx context.Context, cookieID, chatID string)
 	}
 	// 没有本地会话行时，历史调用方尚无机会设置人工模式，保持既有自动回复默认行为。
 	var mode string
+	// err 区分不存在的历史会话与已持久化的 auto/manual 模式。
 	if err := s.DB.QueryRowContext(ctx, `SELECT auto_reply_mode FROM chat_sessions WHERE cookie_id=? AND chat_id=?`, cookieID, chatID).Scan(&mode); errors.Is(err, sql.ErrNoRows) {
 		return true, nil
 	} else if err != nil {
