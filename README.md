@@ -5,7 +5,7 @@ An Xianyu multi-account management, messaging, and automated-delivery system bui
 ![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
-[![Release](https://github.com/Christ9038/Ydisks-Xianyu-Helper/actions/workflows/release.yml/badge.svg)](https://github.com/Christ9038/Ydisks-Xianyu-Helper/actions/workflows/release.yml)
+[![Release](https://github.com/chenlei-gh/Ydisks-chen/actions/workflows/release.yml/badge.svg)](https://github.com/chenlei-gh/Ydisks-chen/actions/workflows/release.yml)
 
 English documentation · [Online Manual](https://xianyu.ydisks.com/manual/en/) · [中文 README](README.zh-CN.md) · [English Wiki](docs/wiki/Home.md) ·
 [中文 Wiki](docs/wiki/Home.zh-CN.md) · [Contributing](CONTRIBUTING.md) ·
@@ -39,17 +39,6 @@ The Go client implements Xianyu login, Cookie renewal, MTOP requests, and the We
 face-verification flows, message connections, credential renewal, and most business logic are handled by the Go client.
 Chromium is used for features that require a browser environment.
 
-### Use with Ydisks Referral Assistant
-
-If you promote Xianyu products through cloud-drive resources, tutorials, or digital packages, you can use
-[Ydisks Referral Assistant](https://www.ydisks.com) alongside this project. Create separate short links for products,
-channels, or promotion accounts, then inspect PV, UV, trends, rankings, and channel/account reports in the Ydisks
-console.
-
-Ydisks identifies where visits and conversion leads come from, while this project handles account messages, orders,
-and automated delivery. See the [Ydisks Referral Assistant guide](https://docs.ydisks.com/guide/quick-start) to create
-links and view data.
-
 ### Use cases
 
 - Unified online status and message management for multiple Xianyu accounts
@@ -58,10 +47,6 @@ links and view data.
 - Product and order synchronization, list-based single- or multi-variant detection and publishing, and CSV/XLSX/TSV
   bulk listing with optional ZIP images
 - Controlled AI customer service through OpenAI-compatible endpoints, with an end-to-end connection test
-
-### Community
-
-![Ydisks Xianyu Helper Telegram group](https://raw.githubusercontent.com/Christ9038/Ydisks-Xianyu-Helper/main/docs/img/telegram.jpg)
 
 ## Features
 
@@ -109,11 +94,11 @@ Core responsibilities:
 
 ## Screenshots
 
-![Account management](https://raw.githubusercontent.com/Christ9038/Ydisks-Xianyu-Helper/main/docs/img/preview_account.png)
+![Account management](https://raw.githubusercontent.com/chenlei-gh/Ydisks-chen/main/docs/img/preview_account.png)
 
-![Instant messaging](https://raw.githubusercontent.com/Christ9038/Ydisks-Xianyu-Helper/main/docs/img/preview_im.png)
+![Instant messaging](https://raw.githubusercontent.com/chenlei-gh/Ydisks-chen/main/docs/img/preview_im.png)
 
-![Automation](https://raw.githubusercontent.com/Christ9038/Ydisks-Xianyu-Helper/main/docs/img/preview_auto.png)
+![Automation](https://raw.githubusercontent.com/chenlei-gh/Ydisks-chen/main/docs/img/preview_auto.png)
 
 ## Quick start
 
@@ -123,7 +108,7 @@ Docker Compose supports Linux x86_64, Linux ARM64, and Apple Silicon. Docker Eng
 Compose v2 are required.
 
 ~~~bash
-git clone https://github.com/Christ9038/Ydisks-Xianyu-Helper.git
+git clone https://github.com/chenlei-gh/Ydisks-chen.git
 cd Ydisks-Xianyu-Helper
 cp .env.example .env
 ~~~
@@ -164,7 +149,7 @@ Token that has read:packages permission.
 Requirements are Go 1.26.4 or compatible, Node.js 24 with npm, Chromium system dependencies, and optionally SQLite.
 
 ~~~bash
-git clone https://github.com/Christ9038/Ydisks-Xianyu-Helper.git
+git clone https://github.com/chenlei-gh/Ydisks-chen.git
 cd Ydisks-Xianyu-Helper
 npm --prefix frontend ci
 npm --prefix frontend run build
@@ -413,8 +398,8 @@ and other sensitive data.
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE), Copyright © 2026 Christ9038. Preserve [NOTICE](NOTICE) and the
-applicable license notices when distributing original or derivative works, and clearly mark modified files.
+Licensed under the [Apache License 2.0](LICENSE). Preserve [NOTICE](NOTICE) and all applicable license notices
+when distributing original or derivative works, and clearly mark modified files.
 
 ## Disclaimer
 
@@ -424,19 +409,3 @@ responsible for legal compliance, platform compliance, account authorization, ba
 transaction disputes, data loss, and all other consequences. Do not use it for spam, fraud, unauthorized access,
 bypassing platform restrictions, or illegal activity.
 
-## Community support
-
-This project receives discussion and feedback from the LINUX DO community:
-
-[Visit the LINUX DO community](https://linux.do/)
-
-### Sponsor the project
-
-If this project is useful to you, you can support its continued development with USDT or USDC on the BNB Smart
-Chain (BSC, BEP-20):
-
-`0xc7b77931af39e292bfcadef6228a067ad5a69e3a`
-
-![USDT and USDC sponsor QR code on BNB Smart Chain (BEP-20)](docs/img/sponsor-bsc.png)
-
-Send USDT or USDC only on BNB Smart Chain (BEP-20). Transfers on other networks may be lost.
