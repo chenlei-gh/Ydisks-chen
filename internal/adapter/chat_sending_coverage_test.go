@@ -116,6 +116,9 @@ func TestChatOutgoingRepositoryRecordsManualReplyInAIConversationHistory(t *test
 		t.Fatal("chat outgoing repository must expose manual AI context recording")
 	}
 	session := chatapp.Session{AccountID: "cid", ChatID: "manual-context-chat", PeerUserID: "buyer-1", ItemID: "item-1"}
+	if err := store.Chats.UpsertSession(ctx, db.ChatSession{CookieID: session.AccountID, ChatID: session.ChatID, BuyerID: session.PeerUserID, ItemID: session.ItemID}); err != nil {
+		t.Fatal(err)
+	}
 	if err := recorder.RecordManualAIContext(ctx, session, "人工补充的商品说明"); err != nil {
 		t.Fatal(err)
 	}
@@ -125,6 +128,16 @@ func TestChatOutgoingRepositoryRecordsManualReplyInAIConversationHistory(t *test
 	}
 	if history[0].Role != "assistant" || history[0].Intent != "manual_reply" || history[0].Content != "人工补充的商品说明" {
 		t.Fatalf("manual context entry=%+v", history[0])
+	}
+	// 客户端提交的商品标识与本地会话不一致时，不得污染另一个商品的 AI 历史。
+	mismatched := session
+	mismatched.ItemID = "other-item"
+	if err := recorder.RecordManualAIContext(ctx, mismatched, "不应写入"); err != nil {
+		t.Fatal(err)
+	}
+	otherHistory, err := store.AIReply.ConversationHistory(ctx, session.AccountID, session.ChatID, "other-item", 10)
+	if err != nil || len(otherHistory) != 0 {
+		t.Fatalf("mismatched item history=%+v err=%v", otherHistory, err)
 	}
 }
 
