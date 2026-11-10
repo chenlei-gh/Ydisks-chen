@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -13,6 +14,39 @@ import (
 )
 
 // TestBuildSystemPrompt 自定义 prompt 替换变量，且始终追加价格与轮次安全约束。
+func TestBoundAIConversationHistoryRespectsMessageAndTotalBudgets(t *testing.T) {
+	history := make([]db.AIConversationMessage, 12)
+	for i := range history {
+		history[i] = db.AIConversationMessage{Role: "user", Content: fmt.Sprintf("m%d", i)}
+	}
+	got := boundAIConversationHistory(history, "current")
+	if len(got) != aiContextMaxMessages || got[0].Content != "m2" || got[len(got)-1].Content != "m11" {
+		t.Fatalf("message window=%+v", got)
+	}
+
+	large := []db.AIConversationMessage{
+		{Role: "user", Content: strings.Repeat("a", 2000)},
+		{Role: "assistant", Content: strings.Repeat("b", 2000)},
+		{Role: "user", Content: strings.Repeat("c", 2000)},
+		{Role: "assistant", Content: strings.Repeat("d", 2000)},
+	}
+	got = boundAIConversationHistory(large, strings.Repeat("买", 2000))
+	if len(got) != 3 || got[0].Content[0] != 'b' || got[2].Content[0] != 'd' {
+		t.Fatalf("total budget should retain newest complete messages, got count=%d", len(got))
+	}
+}
+
+func TestBoundAIConversationHistoryDoesNotPartiallyKeepOldMessage(t *testing.T) {
+	history := []db.AIConversationMessage{
+		{Role: "user", Content: strings.Repeat("旧", 1500)},
+		{Role: "assistant", Content: strings.Repeat("新", 2000)},
+	}
+	got := boundAIConversationHistory(history, strings.Repeat("今", 5000))
+	if len(got) != 1 || got[0].Content != strings.Repeat("新", 2000) {
+		t.Fatalf("history must keep recent complete message only, got=%+v", got)
+	}
+}
+
 func TestBuildSystemPrompt(t *testing.T) {
 	// got 用于本次流程后续判断的got
 	got := buildSystemPrompt("你是卖{item_title}的客服，价格{item_price}", "iPhone", 100, "手机", "", 0, 0, 3, 1, false, "bargain_only", true)
