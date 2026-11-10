@@ -264,13 +264,8 @@ remote verification services only when their trust and data flow are understood.
 
 ## Docker operations
 
-The default image is multi-architecture:
-
-~~~text
-ghcr.io/christ9038/ydisks-xianyu-helper:latest
-├── linux/amd64
-└── linux/arm64
-~~~
+The default image is a multi-architecture GHCR image. Its exact registry reference is configured in `compose.yml`;
+override it with `XIANYU_IMAGE` when using another registry, owner, or version.
 
 The dev branch publishes dev and sha-full-commit tags. A v1.2.3 tag publishes v1.2.3, 1.2.3, 1.2, latest, and
 sha-full-commit tags after all tests, native Chromium launches, health checks, desktop builds, and approval.
