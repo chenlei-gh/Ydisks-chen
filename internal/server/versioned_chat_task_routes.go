@@ -14,6 +14,7 @@ func (s *Server) mountVersionedChatTaskRoutes(r chi.Router) {
 
 		r.Get("/api/v1/chat/sessions", s.listChatSessions)
 		r.Delete("/api/v1/chat/sessions", s.deleteChatSession)
+		r.Put("/api/v1/chat/sessions/reply-mode", s.updateChatSessionReplyMode)
 		r.Get("/api/v1/chat/messages", s.listChatMessages)
 		r.Post("/api/v1/chat/messages", s.sendChatMessage)
 		r.Post("/api/v1/chat/images", s.sendChatImage)
