@@ -822,10 +822,10 @@ test('updateAccountAISettings 提交 AI 工作模式并在缺省时回退为仅�
 
   expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/settings/ai-reply/acc1', expect.objectContaining({ method: 'PUT' }));
   expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-    ai_enabled: true, auto_adjust_price_enabled: false, max_discount_percent: 15, max_discount_amount: 100, max_bargain_rounds: 3, custom_prompts: '', ai_mode: 'full_service',
+    ai_enabled: true, auto_adjust_price_enabled: false, max_discount_percent: 15, max_discount_amount: 100, max_bargain_rounds: 3, max_completion_tokens: 0, custom_prompts: '', ai_mode: 'full_service',
   });
   expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
-    ai_enabled: false, auto_adjust_price_enabled: false, max_discount_percent: 10, max_discount_amount: 100, max_bargain_rounds: 3, custom_prompts: '', ai_mode: 'bargain_only',
+    ai_enabled: false, auto_adjust_price_enabled: false, max_discount_percent: 10, max_discount_amount: 100, max_bargain_rounds: 3, max_completion_tokens: 0, custom_prompts: '', ai_mode: 'bargain_only',
   });
 });
 
