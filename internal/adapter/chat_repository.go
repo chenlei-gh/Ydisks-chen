@@ -140,7 +140,6 @@ func (r chatRepository) HideAndClearSession(ctx context.Context, userID int64, a
 	return r.store.Chats.HideAndClearSession(ctx, userID, accountID, chatID, clearedAt)
 }
 
-
 // SetAutoReplyMode 将用户归属检查与会话模式更新委托给数据库原子操作。
 func (r chatRepository) SetAutoReplyMode(ctx context.Context, userID int64, accountID, chatID, mode string) error {
 	err := r.store.Chats.SetAutoReplyMode(ctx, userID, accountID, chatID, mode)
