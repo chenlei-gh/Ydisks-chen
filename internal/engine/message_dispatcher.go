@@ -220,7 +220,7 @@ func (d *messageDispatcher) handleMessageContext(ctx context.Context, decrypted 
 
 	// chat 用于本次流程后续判断的聊天
 	chat := extractChatMessage(decrypted, d.cookieID, d.currentCookie())
-	if chat != nil && chat.Text != "" {
+	if chat != nil && (chat.Text != "" || isBuyerImageMessage(*chat)) {
 		chat.ObservedAt = observedAt
 		if !d.markAndCheckDedup(decrypted, chat) {
 			return

@@ -254,6 +254,13 @@ jobs:
           npm run build --prefix frontend
           git diff --exit-code -- internal/webui/static
 
+      - name: 失败时上传重新生成的前端产物
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-frontend-static
+          path: internal/webui/static
+
   multidb:
     name: MySQL/PostgreSQL 多数据库回归
     needs: changes

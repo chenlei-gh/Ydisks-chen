@@ -265,6 +265,18 @@ const Settings: React.FC = () => {
                 )}
               </div>
 
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-gray-800">买家图片理解模型（可选）</label>
+                <input
+                  type="text"
+                  value={settings.ai_vision_model || ''}
+                  onChange={/* 当前回调更新独立的视觉模型配置，不影响普通文本模型。 */ event => setSettings({ ...settings, ai_vision_model: event.target.value })}
+                  className="w-full ios-input px-4 py-3 rounded-xl text-sm"
+                  placeholder="例如 qwen3-vl-plus；留空则关闭图片理解"
+                />
+                <p className="text-xs text-gray-500">仅当买家发送图片且此处配置了视觉模型时，系统才会安全下载图片并调用该模型；普通文字仍使用上方模型。两者共用 API 地址和密钥。</p>
+              </div>
+
               <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700">
                 <strong>常见 AI 服务:</strong>
                 <ul className="list-disc list-inside mt-1 space-y-0.5">

@@ -144,14 +144,22 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 		}
 		messages = append(messages, openai.ChatCompletionMessage{Role: role, Content: truncateAIContent(message.Content)})
 	}
-	messages = append(messages, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: m.Text})
-
-	// aiCtx、cancel 用于本次流程后续判断的人工智能Ctx、cancel
+	// aiCtx、cancel 为图片下载和模型请求共享同一个总超时边界。
 	aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	// currentMessage、requestModel、imageAttached 和 imageWarning 保存当前消息、选用模型、附图状态与降级原因。
+	currentMessage, requestModel, imageAttached, imageWarning := prepareAIUserMessage(aiCtx, m, aiCfg.Model, aiCfg.VisionModel)
+	if imageWarning != "" {
+		a.logger.Warn("买家图片无法读取，回退文本模型", "reason", imageWarning)
+	}
+	if imageAttached {
+		messages[0].Content += buyerImageTrustRule
+	}
+	messages = append(messages, currentMessage)
+
 	// resp、err 用于本次流程后续判断的resp、err
 	resp, err := client.CreateChatCompletion(aiCtx, openai.ChatCompletionRequest{
-		Model:       aiCfg.Model,
+		Model:       requestModel,
 		Messages:    messages,
 		Temperature: 0.7,
 	})
@@ -235,9 +243,10 @@ func (a *AIReplierImpl) conversationContext(ctx context.Context, m ChatMessage) 
 
 // globalAIConfig 用于本次流程后续判断的globalAI配置
 type globalAIConfig struct {
-	APIKey  string
-	BaseURL string
-	Model   string
+	APIKey      string
+	BaseURL     string
+	Model       string
+	VisionModel string
 }
 
 // globalAIConfig 封装globalAI配置业务协调。
@@ -263,6 +272,11 @@ func (a *AIReplierImpl) globalAIConfig(ctx context.Context) (*globalAIConfig, er
 	if err != nil {
 		return nil, err
 	}
+	// visionModel 是可选的买家图片理解模型；空值时不下载图片。
+	visionModel, err := a.store.Settings.Get(ctx, "ai_vision_model")
+	if err != nil {
+		return nil, err
+	}
 
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
@@ -273,9 +287,10 @@ func (a *AIReplierImpl) globalAIConfig(ctx context.Context) (*globalAIConfig, er
 		model = defaultAIModel
 	}
 	return &globalAIConfig{
-		APIKey:  strings.TrimSpace(apiKey),
-		BaseURL: baseURL,
-		Model:   model,
+		APIKey:      strings.TrimSpace(apiKey),
+		BaseURL:     baseURL,
+		Model:       model,
+		VisionModel: strings.TrimSpace(visionModel),
 	}, nil
 }
 

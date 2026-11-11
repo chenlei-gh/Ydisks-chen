@@ -335,10 +335,12 @@ func extractChatMessage(decrypted map[string]any, accountID, cookieStr string) *
 	}
 	// reminder 用于本次流程后续判断的reminder
 	reminder, _ := m10["reminderContent"].(string)
-	if reminder == "" {
+	// contentType 用于区分无文字提醒但包含图片正文的买家消息。
+	contentType := messageContentType(m1, m10)
+	if reminder == "" && contentType != "2" {
 		return nil
 	}
-	if isNonUserChatNotice(m1, m10, reminder) {
+	if reminder != "" && isNonUserChatNotice(m1, m10, reminder) {
 		return nil
 	}
 	// chatID 用于本次流程后续判断的聊天ID
