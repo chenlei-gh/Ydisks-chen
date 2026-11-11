@@ -200,7 +200,7 @@ func TestMigrate_ExistingAutomationRunsReceiveEmptyDeliveryProof(t *testing.T) {
 	}
 	// finalVersion、versionErr 验证升级已包含当前全部迁移，不能仅证明旧 delivery_proof 列存在。
 	finalVersion, versionErr := goose.GetDBVersion(rawDB)
-	if versionErr != nil || finalVersion != 60 {
+	if versionErr != nil || finalVersion != 61 {
 		t.Fatalf("final migration version=%d err=%v", finalVersion, versionErr)
 	}
 	if !tableExists(t, rawDB, "order_ownership_repairs") {
@@ -267,8 +267,14 @@ func TestMigrate_UpgradesDatabaseWithMainChatVersions(t *testing.T) {
 	if !tableExists(t, rawDB, "order_reconciliations") {
 		t.Fatal("order_reconciliations should be created by the dev schema baseline migration")
 	}
-	if !columnExists(t, rawDB, "chat_messages", "read_status") || !columnExists(t, rawDB, "chat_messages", "read_at") || !columnExists(t, rawDB, "chat_messages", "media_duration") || !columnExists(t, rawDB, "chat_sessions", "item_image_url") || !columnExists(t, rawDB, "chat_sessions", "is_visible") || !columnExists(t, rawDB, "chat_sessions", "user_hidden_at") || !columnExists(t, rawDB, "chat_sessions", "messages_cleared_at") {
+	if !columnExists(t, rawDB, "chat_messages", "read_status") || !columnExists(t, rawDB, "chat_messages", "read_at") || !columnExists(t, rawDB, "chat_messages", "media_duration") || !columnExists(t, rawDB, "chat_sessions", "item_image_url") || !columnExists(t, rawDB, "chat_sessions", "is_visible") || !columnExists(t, rawDB, "chat_sessions", "user_hidden_at") || !columnExists(t, rawDB, "chat_sessions", "messages_cleared_at") || !columnExists(t, rawDB, "chat_sessions", "auto_reply_mode") || !columnExists(t, rawDB, "chat_sessions", "reply_gate_version") {
 		t.Fatal("chat read tracking, media presentation, and user deletion columns should remain after dev schema baseline upgrade")
+	}
+	// legacyReplyMode 验证升级前已存在的会话通过 00061 迁移后默认保持自动回复。
+	var legacyReplyMode string
+	// err 保存升级前旧会话的默认模式读取结果。
+	if err := rawDB.QueryRow(`SELECT auto_reply_mode FROM chat_sessions WHERE cookie_id='role-upgrade-account' AND chat_id='role-upgrade-chat'`).Scan(&legacyReplyMode); err != nil || legacyReplyMode != "auto" {
+		t.Fatalf("legacy auto reply mode=%q err=%v", legacyReplyMode, err)
 	}
 	// legacyRole、legacyBuyerID 和 legacySellerID 是升级后旧会话的安全默认角色与双方标识。
 	var legacyRole, legacyBuyerID, legacySellerID string
@@ -286,13 +292,13 @@ func TestMigrate_UpgradesDatabaseWithMainChatVersions(t *testing.T) {
 	if !columnExists(t, rawDB, "automation_rule_actions", "delivery_template_id") {
 		t.Fatal("automation_rule_actions should reference delivery templates")
 	}
-	// finalVersion、versionErr 验证迁移账本已推进到单商品发布操作账本的 00060，或记录读取失败。
+	// finalVersion、versionErr 验证迁移账本已推进到会话人工接管模式的 00061，或记录读取失败。
 	finalVersion, versionErr := goose.GetDBVersion(rawDB)
 	if versionErr != nil {
 		t.Fatalf("read final migration version: %v", versionErr)
 	}
-	if finalVersion != 60 {
-		t.Fatalf("final migration version=%d, want 60", finalVersion)
+	if finalVersion != 61 {
+		t.Fatalf("final migration version=%d, want 61", finalVersion)
 	}
 	if !columnExists(t, rawDB, "keywords", "keyword_expressions") || !columnExists(t, rawDB, "keywords", "match_type") {
 		t.Fatal("keywords should include expression collection and match type columns")
@@ -443,9 +449,9 @@ func TestLatestMigrationsDownUpSQLite(t *testing.T) {
 			t.Fatalf("column missing after re-up: %s.%s", c.table, c.col)
 		}
 	}
-	// finalVersion、versionErr 验证完整回滚后重新升级仍到达最新迁移 00060（单商品发布操作账本）。
+	// finalVersion、versionErr 验证完整回滚后重新升级仍到达最新迁移 00061（会话人工接管模式）。
 	finalVersion, versionErr := goose.GetDBVersion(d)
-	if versionErr != nil || finalVersion != 60 {
+	if versionErr != nil || finalVersion != 61 {
 		t.Fatalf("final migration version=%d err=%v", finalVersion, versionErr)
 	}
 	// val 用于本次流程后续判断的val

@@ -247,12 +247,21 @@ jobs:
       - name: 运行前端测试
         run: npm test --prefix frontend
 
-      - name: 构建并校验嵌入式前端产物
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          npm run build --prefix frontend
-          git diff --exit-code -- internal/webui/static
+      - name: 构建嵌入式前端产物
+        id: build_embedded_frontend
+        run: npm run build --prefix frontend
+
+      - name: 校验嵌入式前端产物
+        id: verify_embedded_frontend
+        run: git diff --exit-code -- internal/webui/static
+
+      - name: 上传不一致的嵌入式前端产物
+        if: failure() && steps.build_embedded_frontend.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ydisks-embedded-static-${{ github.sha }}
+          path: internal/webui/static/
+          retention-days: 7
 
   multidb:
     name: MySQL/PostgreSQL 多数据库回归

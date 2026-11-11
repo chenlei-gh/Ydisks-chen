@@ -12,6 +12,7 @@ import ChatMetadataFeature from '../components/ChatMetadataFeature';
 import { ConversationListItem } from '../components/ConversationListItem';
 import { DeleteConversationDialog } from '../components/DeleteConversationDialog';
 import { ItemMessageCard } from '../components/ItemMessageCard';
+import { updateChatSessionReplyMode } from '../api';
 import { useChat } from '../hooks';
 import type { ChatSession } from '../models';
 import type { ChatProps } from '../types';
@@ -48,6 +49,10 @@ const Chat: React.FC<ChatProps> = ({ libraryImageChooser: LibraryChooser }) => {
   const [itemPickerOpen, setItemPickerOpen] = React.useState(false);
 	// deleteTarget 保存等待用户确认清空的会话，空值表示确认框关闭。
 	const [deleteTarget, setDeleteTarget] = React.useState<ChatSession | null>(null);
+	// replyModeUpdating 表示当前会话的人工接管模式切换请求是否正在提交。
+	const [replyModeUpdating, setReplyModeUpdating] = React.useState(false);
+	// replyModeError 保存模式切换或会话状态刷新失败时需要展示的错误。
+	const [replyModeError, setReplyModeError] = React.useState('');
 
   React.useEffect(/* 当前副作用在账号或会话变化时关闭旧上下文中的商品弹窗。 */ () => {
     setItemPickerOpen(false);
@@ -70,6 +75,24 @@ const Chat: React.FC<ChatProps> = ({ libraryImageChooser: LibraryChooser }) => {
 		const deleted = await deleteConversation(deleteTarget.account_id, deleteTarget.chat_id);
 		if (deleted) setDeleteTarget(null);
 	}, [deleteConversation, deleteTarget]);
+
+
+	/** 在当前会话的人工接管与自动回复模式之间切换；后端提交后刷新会话状态。 */
+	const toggleReplyMode = React.useCallback(/* 当前回调提交会话模式变更并刷新持久化状态。 */ async (): Promise<void> => {
+		if (!selectedSession || replyModeUpdating) return;
+		// nextMode 是本次按钮操作准备提交的目标会话模式。
+		const nextMode = selectedSession.auto_reply_mode === 'manual' ? 'auto' : 'manual';
+		setReplyModeUpdating(true);
+		setReplyModeError('');
+		try {
+			await updateChatSessionReplyMode(selectedSession.account_id, selectedSession.chat_id, nextMode);
+			await reloadSessions(activeAccountID);
+		} catch (/* error 保存本次模式切换或状态刷新失败的原因。 */ error) {
+			setReplyModeError(error instanceof Error ? error.message : '切换会话自动回复模式失败');
+		} finally {
+			setReplyModeUpdating(false);
+		}
+	}, [selectedSession, replyModeUpdating, reloadSessions, activeAccountID]);
 
   if (loading) return <div className="flex h-[calc(100vh-4rem)] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-sky-500" /></div>;
 
@@ -158,10 +181,16 @@ const Chat: React.FC<ChatProps> = ({ libraryImageChooser: LibraryChooser }) => {
                     <div className="truncate text-sm font-black text-slate-950">{selectedSession.peer_name || selectedSession.peer_user_id}</div>
                     <div className="mt-0.5 flex flex-col text-xs text-slate-500"><span>用户 ID：</span><span className="truncate">{selectedSession.peer_user_id}</span></div>
                   </div>
-                  <span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-bold ${activeAccount?.runtime_state === 'online' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                  <button type="button" onClick={toggleReplyMode} disabled={replyModeUpdating}
+                    aria-pressed={selectedSession.auto_reply_mode === 'manual'}
+                    className={`ml-auto rounded-lg border px-3 py-1.5 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50 ${selectedSession.auto_reply_mode === 'manual' ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100' : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
+                    {replyModeUpdating ? '正在切换…' : selectedSession.auto_reply_mode === 'manual' ? '恢复自动回复' : '人工接管'}
+                  </button>
+                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${activeAccount?.runtime_state === 'online' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                     {activeAccount?.runtime_state === 'online' ? '账号在线' : '账号离线'}
                   </span>
                 </div>
+                {replyModeError && <p role="alert" className="border-b border-red-100 bg-red-50 px-5 py-2 text-xs text-red-700">{replyModeError}</p>}
                 <div ref={scrollRef} onScroll={handleMessageScroll} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
                   {messagesLoading ? <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-sky-500" /></div> : <>
                     {hasOlder && <div className="flex justify-center pb-1">

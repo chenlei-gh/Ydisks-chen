@@ -56,6 +56,22 @@ export const getChatSessionPage = async (accountId: string, cursor?: number, opt
 export const getChatSessions = async (accountId: string, options?: RequestControlOptions): Promise<ChatSession[]> =>
 	(await getChatSessionPage(accountId, undefined, options)).sessions;
 
+
+/** 切换指定会话的自动回复/人工接管模式。 */
+export const updateChatSessionReplyMode = async (
+  accountId: string,
+  chatId: string,
+  mode: 'auto' | 'manual',
+  options?: RequestControlOptions,
+): Promise<OperationResponse> =>
+  runContractRequest(
+    /* signal 是本次会话模式切换请求的超时与取消控制信号。 */ signal => contractClient.PUT('/api/v1/chat/sessions/reply-mode', {
+      body: { account_id: accountId, chat_id: chatId, mode },
+      signal,
+    }),
+    options,
+  );
+
 /** 在本机隐藏指定会话并物理清空其展示消息。 */
 export const deleteChatSession = async (accountId: string, chatId: string, options?: RequestControlOptions): Promise<OperationResponse> =>
   runContractRequest(/* signal 是本次会话删除请求的超时与取消控制信号。 */ signal => contractClient.DELETE('/api/v1/chat/sessions', {

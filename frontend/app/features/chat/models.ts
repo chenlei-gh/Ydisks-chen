@@ -81,6 +81,8 @@ export interface ChatSession {
 	peer_avatar_url?: string;
 	/** 当前账号在角色商品中的身份；旧会话尚未识别时为 unknown。 */
 	account_role?: 'seller' | 'buyer' | 'unknown';
+	/** 当前会话的自动回复模式；manual 表示人工接管。 */
+	auto_reply_mode?: 'auto' | 'manual';
 	/** 已确认的买家平台标识。 */
 	buyer_user_id?: string;
 	/** 已确认的卖家平台标识。 */

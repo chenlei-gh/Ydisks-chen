@@ -59,7 +59,7 @@ func (r chatRepository) ListSessions(ctx context.Context, userID int64, accountI
 		sessions = append(sessions, chatapp.Session{
 			AccountID: row.CookieID, ChatID: row.ChatID, PeerUserID: row.BuyerID,
 			PeerName: row.BuyerName, PeerAvatar: row.BuyerAvatar, AccountRole: row.AccountRole,
-			BuyerUserID: row.BuyerUserID, SellerUserID: row.SellerUserID, RoleItemID: row.RoleItemID, RoleSource: row.RoleSource, ItemID: row.ItemID,
+			BuyerUserID: row.BuyerUserID, SellerUserID: row.SellerUserID, RoleItemID: row.RoleItemID, RoleSource: row.RoleSource, AutoReplyMode: row.AutoReplyMode, ItemID: row.ItemID,
 			ItemTitle: row.ItemTitle, ItemImageURL: row.ItemImageURL, LastMessage: row.LastMessage, LastMessageAt: row.LastMessageAt,
 			UnreadCount: row.UnreadCount,
 		})
@@ -79,7 +79,7 @@ func (r chatRepository) FindSession(ctx context.Context, userID int64, accountID
 	}
 	return chatapp.Session{AccountID: row.CookieID, ChatID: row.ChatID, PeerUserID: row.BuyerID, PeerName: row.BuyerName,
 		PeerAvatar: row.BuyerAvatar, AccountRole: row.AccountRole, BuyerUserID: row.BuyerUserID, SellerUserID: row.SellerUserID,
-		RoleItemID: row.RoleItemID, RoleSource: row.RoleSource, ItemID: row.ItemID, ItemTitle: row.ItemTitle, ItemImageURL: row.ItemImageURL,
+		RoleItemID: row.RoleItemID, RoleSource: row.RoleSource, AutoReplyMode: row.AutoReplyMode, ItemID: row.ItemID, ItemTitle: row.ItemTitle, ItemImageURL: row.ItemImageURL,
 		LastMessage: row.LastMessage, LastMessageAt: row.LastMessageAt, UnreadCount: row.UnreadCount}, nil
 }
 
@@ -102,7 +102,7 @@ func (r chatRepository) ListSessionPage(ctx context.Context, userID int64, accou
 		sessions = append(sessions, chatapp.Session{
 			AccountID: row.CookieID, ChatID: row.ChatID, PeerUserID: row.BuyerID,
 			PeerName: row.BuyerName, PeerAvatar: row.BuyerAvatar, AccountRole: row.AccountRole,
-			BuyerUserID: row.BuyerUserID, SellerUserID: row.SellerUserID, RoleItemID: row.RoleItemID, RoleSource: row.RoleSource, ItemID: row.ItemID,
+			BuyerUserID: row.BuyerUserID, SellerUserID: row.SellerUserID, RoleItemID: row.RoleItemID, RoleSource: row.RoleSource, AutoReplyMode: row.AutoReplyMode, ItemID: row.ItemID,
 			ItemTitle: row.ItemTitle, ItemImageURL: row.ItemImageURL, LastMessage: row.LastMessage, LastMessageAt: row.LastMessageAt,
 			UnreadCount: row.UnreadCount,
 		})
@@ -138,6 +138,16 @@ func (r chatRepository) MarkRead(ctx context.Context, userID int64, accountID, c
 // HideAndClearSession 原子隐藏当前用户的会话并清空聊天页消息，保留自动化仍需使用的会话实体。
 func (r chatRepository) HideAndClearSession(ctx context.Context, userID int64, accountID, chatID string, clearedAt int64) (bool, error) {
 	return r.store.Chats.HideAndClearSession(ctx, userID, accountID, chatID, clearedAt)
+}
+
+// SetAutoReplyMode 将用户归属检查与会话模式更新委托给数据库原子操作。
+func (r chatRepository) SetAutoReplyMode(ctx context.Context, userID int64, accountID, chatID, mode string) error {
+	// err 保存数据库模式切换结果，供应用层统一映射会话归属错误。
+	err := r.store.Chats.SetAutoReplyMode(ctx, userID, accountID, chatID, mode)
+	if errors.Is(err, db.ErrNotFound) {
+		return chatapp.ErrChatSessionNotFound
+	}
+	return err
 }
 
 // FindInboundParsedJSONContaining 提供旧版聊天消息标识迁移所需的受限诊断帧查询。
@@ -326,6 +336,9 @@ var _ chatapp.SessionRepository = chatRepository{}
 
 // 确保数据库聊天适配器覆盖用户会话删除所需的归属与原子清空端口。
 var _ chatapp.SessionDeletionRepository = chatRepository{}
+
+// 确保数据库聊天适配器覆盖会话自动回复模式用例。
+var _ chatapp.SessionReplyModeRepository = chatRepository{}
 
 // 确保数据库聊天适配器覆盖快捷回复和买家备注的应用层端口。
 var _ chatapp.MetadataRepository = chatRepository{}

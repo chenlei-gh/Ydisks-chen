@@ -129,6 +129,52 @@ func (s *Server) listChatSessions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// updateChatSessionReplyModeRequest 保存切换会话自动回复模式所需的账号、会话和目标模式。
+type updateChatSessionReplyModeRequest struct {
+	AccountID string `json:"account_id"`
+	ChatID    string `json:"chat_id"`
+	Mode      string `json:"mode"`
+}
+
+// updateChatSessionReplyMode 在当前用户归属范围内切换会话自动回复或人工接管模式。
+func (s *Server) updateChatSessionReplyMode(w http.ResponseWriter, r *http.Request) {
+	// session 保存当前已通过认证的用户身份。
+	session := auth.SessionFromContext(r.Context())
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	// input 保存请求体中的会话标识与目标自动回复模式。
+	var input updateChatSessionReplyModeRequest
+	// err 保存请求体解析结果，格式错误时直接返回 400。
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeErrCode(w, http.StatusBadRequest, "chat_reply_mode_invalid", "请求参数无效", "")
+		return
+	}
+	input.AccountID = strings.TrimSpace(input.AccountID)
+	input.ChatID = strings.TrimSpace(input.ChatID)
+	input.Mode = strings.TrimSpace(input.Mode)
+	// modePort 和 supported 表示当前聊天应用是否提供会话模式切换能力。
+	modePort, supported := s.chatApplication().(interface {
+		SetAutoReplyMode(context.Context, int64, string, string, string) error
+	})
+	if !supported {
+		writeErrCode(w, http.StatusServiceUnavailable, "chat_session_service_unavailable", "聊天会话服务未启用", "")
+		return
+	}
+	// err 保存应用层执行会话模式切换的结果。
+	err := modePort.SetAutoReplyMode(r.Context(), session.UserID, input.AccountID, input.ChatID, input.Mode)
+	switch {
+	case err == nil:
+		writeJSON(w, http.StatusOK, operationResponse{Success: true})
+	case errors.Is(err, chatapp.ErrInvalidInput):
+		writeErrCode(w, http.StatusBadRequest, "chat_reply_mode_invalid", "会话自动回复模式参数无效", "")
+	case errors.Is(err, chatapp.ErrChatSessionNotFound):
+		writeErrCode(w, http.StatusNotFound, "chat_session_not_found", "聊天会话不存在或无权访问", "")
+	case errors.Is(err, chatapp.ErrSessionUnavailable):
+		writeErrCode(w, http.StatusServiceUnavailable, "chat_session_service_unavailable", "聊天会话服务未启用", "")
+	default:
+		writeErrCode(w, http.StatusInternalServerError, "chat_reply_mode_update_failed", "更新会话自动回复模式失败", "")
+	}
+}
+
 // deleteChatSession 隐藏当前用户的本地聊天会话并物理清空展示消息，不调用闲鱼平台删除能力。
 func (s *Server) deleteChatSession(w http.ResponseWriter, r *http.Request) {
 	// session 保存认证中间件注入的当前管理用户身份。

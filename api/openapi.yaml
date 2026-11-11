@@ -3290,6 +3290,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/chat/sessions/reply-mode":
+    put:
+      operationId: putApiV1ChatSessionsReplyMode
+      summary: 切换会话自动回复或人工接管模式
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id, chat_id, mode]
+              properties:
+                account_id: {type: string}
+                chat_id: {type: string}
+                mode: {type: string, enum: [auto, manual]}
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 会话不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/chat/sessions":
     delete:
       operationId: deleteApiV1ChatSessions
@@ -9833,6 +9886,7 @@ components:
         peer_name: {type: string}
         peer_avatar_url: {type: string}
         account_role: {type: string, enum: [seller, buyer, unknown]}
+        auto_reply_mode: {type: string, enum: [auto, manual]}
         buyer_user_id: {type: string}
         seller_user_id: {type: string}
         role_item_id: {type: string}
