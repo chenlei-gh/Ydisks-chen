@@ -3,6 +3,7 @@ import type { Item } from './api';
 import type { PublishLocation } from './api';
 import { createItem,deleteItem,getPublishLocations,itemErrorMessage,recommendPublishCategory as recommendItemPublishCategory,syncItemsFromAccount,updateItem } from './api';
 import { clearSinglePublishOperationID,getOrCreateSinglePublishOperationID,getSinglePublishOperation,publishSingleItem } from './singlePublishOperation';
+import { getSinglePublishTabLockName,runSinglePublishWithTabLock } from './singlePublishLock';
 import type { PublishSkuRow, PublishSpec } from '../../../shared/ui/publish/publishSpecs';
 import type { PublishCategory } from './types';
 
@@ -335,6 +336,8 @@ export const useItemActions = ({ selectedAccount, setSelectedAccount, setItems, 
     if (publishForm.specs.length === 0 && (!publishForm.quantity || Number(publishForm.quantity) <= 0)) return alert('库存数量必须大于 0');
     if (publishForm.images.length === 0) return alert('至少上传 1 张商品图片');
     if (publishForm.postage_mode === 'fixed' && !publishForm.postage.trim()) return alert('请填写一口价邮费');
+    // executePublish 保证整个远端发布与本地收口过程都在浏览器标签页锁内完成。
+    const executePublish = async (): Promise<void> => {
     setPublishing(true);
     // operationID 在 try/catch 外保存，失败时可查询服务端的持久化状态。
     let operationID = '';
@@ -380,6 +383,19 @@ export const useItemActions = ({ selectedAccount, setSelectedAccount, setItems, 
       alert(itemErrorMessage(error, '发布失败，请重试') + (statusHint ? '\\n\\n' + statusHint : ''));
     } finally {
       setPublishing(false);
+    }
+    };
+    try {
+      // lockName 基于账号和完整商品表单生成，确保不同标签页对同一商品竞争同一把锁。
+      const lockName = getSinglePublishTabLockName(publishForm, publishLocation, publishCategory);
+      // lockResult 只有在用户确认继续且前一个标签页释放锁后才会执行发布任务。
+      const lockResult = await runSinglePublishWithTabLock(lockName, executePublish, /* confirmDuplicateTab 冲突时询问用户是否排队继续。 */ () =>
+        window.confirm('检测到另一个标签页正在发布相同商品。选择“确定”将在前一个发布操作结束后继续；选择“取消”则放弃本次发布。'),
+      );
+      if (lockResult.status === 'cancelled') alert('已取消本次发布，未发送发布请求。');
+    } catch (/* error 表示浏览器发布协调锁申请异常。 */ error: unknown) {
+      console.error('申请商品发布协调锁失败:', error);
+      alert(itemErrorMessage(error, '无法安全协调商品发布，请稍后重试'));
     }
   }, [loadItems, onConfigureDelivery, publishCategory, publishForm, publishLocation, selectedAccount]);
 
