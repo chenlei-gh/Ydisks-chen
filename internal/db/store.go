@@ -35,6 +35,8 @@ type Store struct {
 	// ProductTemplates 保存可批量铺货的商品模板。
 	ProductTemplates *ProductTemplates
 	AIReply          *AIReply
+	// AIUsage 保存模型调用的 Token、耗时和结果状态，不保存请求正文或 API Key。
+	AIUsage *AIUsage
 	// ItemAISettings 保存商品级 AI 启停覆盖与专属资料。
 	ItemAISettings *ItemAISettings
 	Notifications  *Notifications
@@ -105,6 +107,7 @@ func NewStore(db *sql.DB, dialect Dialect) *Store {
 		LibraryImages:           &LibraryImages{DB: db, Dialect: dialect},
 		ProductTemplates:        &ProductTemplates{DB: db, Dialect: dialect},
 		AIReply:                 &AIReply{DB: db, Dialect: dialect, codec: codec},
+		AIUsage:                 &AIUsage{DB: db},
 		ItemAISettings:          &ItemAISettings{DB: db, Dialect: dialect},
 		Notifications:           &Notifications{DB: db, Dialect: dialect, codec: codec},
 		Settings:                &SystemSettings{DB: db, Dialect: dialect, codec: codec},

@@ -46,6 +46,8 @@ type AIReplySettings struct {
 	MaxDiscountAmount int
 	// MaxBargainRounds 是允许的最大砍价轮次。
 	MaxBargainRounds int
+	// MaxCompletionTokens 是账号可选的模型最大输出 Token 数；0 表示不由应用层设置上限。
+	MaxCompletionTokens int
 	// CustomPrompts 是账号自定义提示词或客服规则。
 	CustomPrompts string
 	// AIMode 是 AI 工作模式：bargain_only 或 full_service。
@@ -315,6 +317,9 @@ func (s *Service) UpsertAIReply(ctx context.Context, userID int64, cookieID stri
 	}
 	if settings.MaxBargainRounds < 1 || settings.MaxBargainRounds > 10 {
 		return errors.New("最大砍价轮次必须在 1 到 10 之间")
+	}
+	if settings.MaxCompletionTokens < 0 {
+		return errors.New("最大输出 Token 数不能小于 0")
 	}
 	settings.AIMode = strings.TrimSpace(settings.AIMode)
 	if settings.AIMode == "" {

@@ -347,6 +347,7 @@ export const updateAccountAISettings = async (cookieId: string, settings: Partia
     max_discount_percent: settings.max_discount_percent ?? 10,
     max_discount_amount: settings.max_discount_amount ?? 100,
     max_bargain_rounds: settings.max_bargain_rounds ?? 3,
+    max_completion_tokens: settings.max_completion_tokens ?? 0,
     custom_prompts: settings.custom_prompts ?? '',
     ai_mode: settings.ai_mode ?? 'bargain_only'
   };

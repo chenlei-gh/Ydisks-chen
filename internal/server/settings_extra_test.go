@@ -495,7 +495,7 @@ func TestAIReplySettingsAreUserScoped(t *testing.T) {
 
 	// setReq 用于本次流程后续判断的setReq
 	setReq := httptest.NewRequest(http.MethodPut, "/ai-reply-settings/other-acc", strings.NewReader(
-		`{"ai_enabled":true,"max_discount_percent":20,"max_discount_amount":200,"max_bargain_rounds":5,"custom_prompts":"override"}`,
+		`{"ai_enabled":true,"max_discount_percent":20,"max_discount_amount":200,"max_bargain_rounds":5,"max_completion_tokens":2048,"custom_prompts":"override"}`,
 	))
 	setReq.AddCookie(cookie)
 	// setRec 用于本次流程后续判断的setRec
@@ -666,5 +666,73 @@ func TestSystemSettingsEndpointUsesExplicitSecretCommands(t *testing.T) {
 	h.ServeHTTP(legacyForbiddenRec, legacyForbiddenReq)
 	if legacyForbiddenRec.Code != http.StatusBadRequest {
 		t.Fatalf("legacy forbidden status=%d body=%s", legacyForbiddenRec.Code, legacyForbiddenRec.Body.String())
+	}
+}
+
+// TestAIReplyMaxCompletionTokensLegacyUpdatePreservesLimit 验证旧客户端省略新字段时保留现有设置，显式 0 才清除上限。
+func TestAIReplyMaxCompletionTokensLegacyUpdatePreservesLimit(t *testing.T) {
+	// srv 和 cleanup 分别保存测试服务器及其清理函数。
+	srv, _, cleanup := newTestServer(t)
+	defer cleanup()
+	// handler 是当前测试使用的 HTTP 路由处理器。
+	handler := srv.Router()
+	// cookie 是测试账号的登录凭证。
+	cookie := loginHelper(t, handler)
+
+	// save 发送账号 AI 设置更新请求并返回 HTTP 状态码。
+	save := func(body string) int {
+		// request 是当前设置更新请求。
+		request := httptest.NewRequest(http.MethodPut, "/ai-reply-settings/acc1", strings.NewReader(body))
+		request.AddCookie(cookie)
+		// response 是当前设置更新请求的响应记录器。
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response.Code
+	}
+	// read 读取当前账号 AI 设置并返回解码后的字段。
+	read := func() map[string]any {
+		// request 是当前设置读取请求。
+		request := httptest.NewRequest(http.MethodGet, "/ai-reply-settings/acc1", nil)
+		request.AddCookie(cookie)
+		// response 是当前设置读取请求的响应记录器。
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("read settings status=%d body=%s", response.Code, response.Body.String())
+		}
+		// settings 保存解码后的账号 AI 设置。
+		var settings map[string]any
+		// err 是读取响应 JSON 解码失败时的错误。
+		if err := json.Unmarshal(response.Body.Bytes(), &settings); err != nil {
+			t.Fatalf("decode settings: %v", err)
+		}
+		return settings
+	}
+
+	// base 是旧客户端仍会提交的 AI 设置字段集合，不包含新 Token 字段。
+	base := `"ai_enabled":true,"auto_adjust_price_enabled":false,"max_discount_percent":10,"max_discount_amount":100,"max_bargain_rounds":3,"custom_prompts":"","ai_mode":"bargain_only"`
+	// status 是首次保存显式输出上限后的 HTTP 状态码。
+	if status := save("{" + base + `,"max_completion_tokens":2048}`); status != http.StatusOK {
+		t.Fatalf("initial save status=%d", status)
+	}
+	// status 是模拟旧客户端省略新字段更新后的 HTTP 状态码。
+	if status := save("{" + base + `,"custom_prompts":"legacy update"}`); status != http.StatusOK {
+		t.Fatalf("legacy update status=%d", status)
+	}
+	// got 是旧客户端更新后读取到的最大输出 Token 数。
+	if got := read()["max_completion_tokens"]; got != float64(2048) {
+		t.Fatalf("omitted field should preserve 2048, got %v", got)
+	}
+	// status 是显式清除输出上限后的 HTTP 状态码。
+	if status := save("{" + base + `,"max_completion_tokens":0}`); status != http.StatusOK {
+		t.Fatalf("clear limit status=%d", status)
+	}
+	// got 是显式清除后读取到的最大输出 Token 数。
+	if got := read()["max_completion_tokens"]; got != float64(0) {
+		t.Fatalf("explicit zero should clear limit, got %v", got)
+	}
+	// status 是提交负数输出上限后的 HTTP 状态码。
+	if status := save("{" + base + `,"max_completion_tokens":-1}`); status != http.StatusBadRequest {
+		t.Fatalf("negative limit status=%d", status)
 	}
 }

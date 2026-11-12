@@ -254,7 +254,7 @@ func TestMultiDBKeywordExpressionsCRUD(t *testing.T) {
 	}
 }
 
-// TestMultiDBKeywordExpressionsMigration 验证三方言 00054 迁移可回退到 00053 后重新升级到最新版本。
+// TestMultiDBKeywordExpressionsMigration 验证三方言关键词表达式迁移可回退到 00053 后重新升级到最新版本。
 func TestMultiDBKeywordExpressionsMigration(t *testing.T) {
 	// target 表示当前可用的数据库方言迁移目标。
 	for _, target := range allTestTargets(t) {
@@ -272,7 +272,7 @@ func TestMultiDBKeywordExpressionsMigration(t *testing.T) {
 			goose.SetBaseFS(migrationsFS)
 			// version、versionErr 保存回退前的迁移版本及读取错误。
 			version, versionErr := goose.GetDBVersion(target.store.DB)
-			if versionErr != nil || version != 60 {
+			if versionErr != nil || version != 63 {
 				t.Fatalf("initial migration version=%d err=%v", version, versionErr)
 			}
 			// downErr 保存回退关键词表达式迁移的错误。
@@ -282,16 +282,16 @@ func TestMultiDBKeywordExpressionsMigration(t *testing.T) {
 			if columnExistsForDialect(t, target.store.DB, target.dialect, "keywords", "keyword_expressions") || columnExistsForDialect(t, target.store.DB, target.dialect, "keywords", "match_type") {
 				t.Fatal("keyword expression columns should be absent after down to 00053")
 			}
-			// upErr 保存重新应用关键词表达式迁移的错误。
-			if upErr := goose.UpTo(target.store.DB, "migrations/"+subdir, 60); upErr != nil {
+			// upErr 保存重新应用后续数据库迁移的错误。
+			if upErr := goose.UpTo(target.store.DB, "migrations/"+subdir, 63); upErr != nil {
 				t.Fatalf("up keyword expression migration: %v", upErr)
 			}
 			if !columnExistsForDialect(t, target.store.DB, target.dialect, "keywords", "keyword_expressions") || !columnExistsForDialect(t, target.store.DB, target.dialect, "keywords", "match_type") {
-				t.Fatal("keyword expression columns should exist after up to 00054")
+				t.Fatal("keyword expression columns should exist after up to latest")
 			}
 			// finalVersion、finalVersionErr 保存重新升级后的最新迁移版本及读取错误。
 			finalVersion, finalVersionErr := goose.GetDBVersion(target.store.DB)
-			if finalVersionErr != nil || finalVersion != 60 {
+			if finalVersionErr != nil || finalVersion != 63 {
 				t.Fatalf("final migration version=%d err=%v", finalVersion, finalVersionErr)
 			}
 		})

@@ -29,6 +29,7 @@ const aiSettingsFixture: AIReplySettings = {
   max_discount_percent: 10,
   max_discount_amount: 100,
   max_bargain_rounds: 3,
+  max_completion_tokens: 0,
   custom_prompts: '',
   ai_mode: 'bargain_only',
 };

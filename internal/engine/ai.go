@@ -121,50 +121,10 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 		systemPrompt += "\n当前买家已经超过最大砍价轮次。不得继续降价，只能礼貌说明价格不再优惠。"
 	}
 
-	// 调 OpenAI 兼容接口。
-	clientCfg := openai.DefaultConfig(aiCfg.APIKey)
-	if aiCfg.BaseURL != "" {
-		clientCfg.BaseURL = aiCfg.BaseURL
-	}
-	clientCfg.HTTPClient, err = newAIHTTPClient(clientCfg.BaseURL)
+	// resp 保存模型响应；err 保存模型调用或用量记录流程的错误。
+	resp, err := a.requestAICompletion(ctx, m, aiCfg, history, systemPrompt, cfg.MaxCompletionTokens)
 	if err != nil {
-		return nil, fmt.Errorf("AI API 地址无效: %w", err)
-	}
-	// client 用于本次流程后续判断的client
-	client := openai.NewClientWithConfig(clientCfg)
-
-	// messages 用于本次流程后续判断的消息列表
-	messages := []openai.ChatCompletionMessage{{Role: openai.ChatMessageRoleSystem, Content: systemPrompt}}
-	// message 表示当前遍历过程中的消息
-	for _, message := range history {
-		// role 用于本次流程后续判断的role
-		role := openai.ChatMessageRoleUser
-		if message.Role == "assistant" {
-			role = openai.ChatMessageRoleAssistant
-		}
-		messages = append(messages, openai.ChatCompletionMessage{Role: role, Content: truncateAIContent(message.Content)})
-	}
-	// aiCtx、cancel 为图片下载和模型请求共享同一个总超时边界。
-	aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	// currentMessage、requestModel、imageAttached 和 imageWarning 保存当前消息、选用模型、附图状态与降级原因。
-	currentMessage, requestModel, imageAttached, imageWarning := prepareAIUserMessage(aiCtx, m, aiCfg.Model, aiCfg.VisionModel)
-	if imageWarning != "" {
-		a.logger.Warn("买家图片无法读取，回退文本模型", "reason", imageWarning)
-	}
-	if imageAttached {
-		messages[0].Content += buyerImageTrustRule
-	}
-	messages = append(messages, currentMessage)
-
-	// resp、err 用于本次流程后续判断的resp、err
-	resp, err := client.CreateChatCompletion(aiCtx, openai.ChatCompletionRequest{
-		Model:       requestModel,
-		Messages:    messages,
-		Temperature: 0.7,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("AI 调用失败: %w", err)
+		return nil, err
 	}
 	if len(resp.Choices) == 0 {
 		return nil, nil
@@ -214,6 +174,77 @@ func (a *AIReplierImpl) Reply(ctx context.Context, m ChatMessage) (*ReplyResult,
 		}
 	}
 	return &ReplyResult{Text: reply, AutoPriceQuote: quote}, nil
+}
+
+// requestAICompletion 构造多模态消息、调用模型并记录本次请求的 Token 用量。
+func (a *AIReplierImpl) requestAICompletion(ctx context.Context, m ChatMessage, aiCfg *globalAIConfig, history []db.AIConversationMessage, systemPrompt string, maxCompletionTokens int) (*openai.ChatCompletionResponse, error) {
+	// clientCfg 保存当前账号模型服务的连接配置。
+	clientCfg := openai.DefaultConfig(aiCfg.APIKey)
+	if aiCfg.BaseURL != "" {
+		clientCfg.BaseURL = aiCfg.BaseURL
+	}
+	// err 是创建受限模型 HTTP 客户端或执行模型请求时返回的错误。
+	var err error
+	clientCfg.HTTPClient, err = newAIHTTPClient(clientCfg.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("AI API 地址无效: %w", err)
+	}
+	// client 是使用当前账号模型服务配置创建的 OpenAI 兼容客户端。
+	client := openai.NewClientWithConfig(clientCfg)
+	// messages 保存系统规则、历史对话及当前买家消息。
+	messages := []openai.ChatCompletionMessage{{Role: openai.ChatMessageRoleSystem, Content: systemPrompt}}
+	// message 是当前遍历到的历史对话消息。
+	for _, message := range history {
+		// role 是转换后的 OpenAI 消息角色。
+		role := openai.ChatMessageRoleUser
+		if message.Role == "assistant" {
+			role = openai.ChatMessageRoleAssistant
+		}
+		messages = append(messages, openai.ChatCompletionMessage{Role: role, Content: truncateAIContent(message.Content)})
+	}
+	// aiCtx 和 cancel 为图片下载及模型请求共享的总超时控制。
+	aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	// currentMessage、requestModel、imageAttached 和 imageWarning 保存当前消息、模型、附图状态及降级原因。
+	currentMessage, requestModel, imageAttached, imageWarning := prepareAIUserMessage(aiCtx, m, aiCfg.Model, aiCfg.VisionModel)
+	if imageWarning != "" {
+		a.logger.Warn("买家图片无法读取，回退文本模型", "reason", imageWarning)
+	}
+	if imageAttached {
+		messages[0].Content += buyerImageTrustRule
+	}
+	messages = append(messages, currentMessage)
+	// requestStartedAt 记录模型请求开始时间，用于统计实际调用耗时。
+	requestStartedAt := time.Now()
+	// request 保存模型聊天补全参数；未设置上限时保持 SDK 默认行为。
+	request := openai.ChatCompletionRequest{Model: requestModel, Messages: messages, Temperature: 0.7}
+	if maxCompletionTokens > 0 {
+		request.MaxCompletionTokens = maxCompletionTokens
+	}
+	// resp 保存模型返回结果；err 保存请求失败原因。
+	resp, err := client.CreateChatCompletion(aiCtx, request)
+	// taskType 区分普通文本请求与实际附带买家图片的视觉请求。
+	taskType := "text"
+	if imageAttached {
+		taskType = "vision"
+	}
+	// usageRecord 保存本次模型调用的非内容用量元数据。
+	usageRecord := db.AIUsageRecord{
+		CookieID: a.cookieID, Provider: aiProviderName(aiCfg.BaseURL), Model: requestModel,
+		TaskType: taskType, DurationMS: time.Since(requestStartedAt).Milliseconds(),
+	}
+	if err != nil {
+		usageRecord.Status = "failed"
+		usageRecord.ErrorKind = aiUsageErrorKind(aiCtx, err)
+		a.recordAIUsage(ctx, usageRecord)
+		return nil, fmt.Errorf("AI 调用失败: %w", err)
+	}
+	usageRecord.Status = "success"
+	usageRecord.PromptTokens = resp.Usage.PromptTokens
+	usageRecord.CompletionTokens = resp.Usage.CompletionTokens
+	usageRecord.TotalTokens = resp.Usage.TotalTokens
+	a.recordAIUsage(ctx, usageRecord)
+	return &resp, nil
 }
 
 // defaultAIReplySettings 返回商品强制启用但账号尚无配置时使用的向后兼容默认策略。

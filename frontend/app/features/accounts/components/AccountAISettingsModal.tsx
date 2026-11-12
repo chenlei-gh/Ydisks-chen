@@ -36,6 +36,8 @@ export const AccountAISettingsModal: React.FC<AccountAISettingsModalProps> = ({ 
   const handleDiscountAmountChange = (event: React.ChangeEvent<HTMLInputElement>) => updateSettings({ max_discount_amount: parseInt(event.target.value, 10) || 0 });
   // handleBargainRoundsChange 更新最大砍价轮次。
   const handleBargainRoundsChange = (event: React.ChangeEvent<HTMLInputElement>) => updateSettings({ max_bargain_rounds: parseInt(event.target.value, 10) || 1 });
+  // handleMaxCompletionTokensChange 更新账号级最大输出 Token 数；0 表示不设置应用层上限。
+  const handleMaxCompletionTokensChange = (event: React.ChangeEvent<HTMLInputElement>) => updateSettings({ max_completion_tokens: Math.max(0, parseInt(event.target.value, 10) || 0) });
   // handlePromptChange 更新自定义 AI 提示词。
   const handlePromptChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => updateSettings({ custom_prompts: event.target.value });
   // handleModeChange 更新账号 AI 工作模式。
@@ -83,6 +85,11 @@ export const AccountAISettingsModal: React.FC<AccountAISettingsModalProps> = ({ 
               <div><label className="block text-sm font-bold text-gray-700 mb-2">最大折扣金额 (元)</label><input type="number" value={settings.max_discount_amount} onChange={handleDiscountAmountChange} className="w-full ios-input px-4 py-3 rounded-xl" min="0" /><p className="text-xs text-gray-500 mt-1">例如：100 表示最多降价 100 元；设为 0 表示不允许降价</p></div>
               <div><label className="block text-sm font-bold text-gray-700 mb-2">最大砍价轮次</label><input type="number" value={settings.max_bargain_rounds} onChange={handleBargainRoundsChange} className="w-full ios-input px-4 py-3 rounded-xl" min="1" max="10" /><p className="text-xs text-gray-500 mt-1">买家最多可以砍价的次数</p></div>
             </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-3">模型输出限制</h3>
+            <div className="max-w-xs"><label className="block text-sm font-bold text-gray-700 mb-2">最大输出 Token 数</label><input type="number" inputMode="numeric" min="0" step="1" value={settings.max_completion_tokens ?? 0} onChange={handleMaxCompletionTokensChange} className="w-full ios-input px-4 py-3 rounded-xl" /><p className="text-xs text-gray-500 mt-1">设为 0 表示不设置应用层上限，实际输出由模型服务商决定。不同模型可能有各自的限制。</p></div>
           </div>
 
           <div><label className="block text-sm font-bold text-gray-700 mb-2">{settings.ai_mode === 'full_service' ? '店铺客服规则（可选）' : '自定义提示词（可选）'}</label><textarea value={settings.custom_prompts} onChange={handlePromptChange} placeholder={settings.ai_mode === 'full_service' ? '例如：现货商品 24 小时内发货；不确定的问题请引导买家联系人工客服。' : '例如：回复时保持礼貌专业，使用简洁的语言。'} className="w-full ios-input px-4 py-3 rounded-xl h-40 resize-none" /></div>
