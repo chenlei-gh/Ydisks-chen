@@ -291,7 +291,7 @@ func TestMigrate_UpgradesDatabaseWithMainChatVersions(t *testing.T) {
 	if versionErr != nil {
 		t.Fatalf("read final migration version: %v", versionErr)
 	}
-	if finalVersion != 61 {
+	if finalVersion != 63 {
 		t.Fatalf("final migration version=%d, want 63", finalVersion)
 	}
 	if !columnExists(t, rawDB, "keywords", "keyword_expressions") || !columnExists(t, rawDB, "keywords", "match_type") {
@@ -445,7 +445,7 @@ func TestLatestMigrationsDownUpSQLite(t *testing.T) {
 	}
 	// finalVersion、versionErr 验证完整回滚后重新升级仍到达最新迁移 00063（AI 设置与用量迁移）。
 	finalVersion, versionErr := goose.GetDBVersion(d)
-	if versionErr != nil || finalVersion != 61 {
+	if versionErr != nil || finalVersion != 63 {
 		t.Fatalf("final migration version=%d err=%v", finalVersion, versionErr)
 	}
 	// val 用于本次流程后续判断的val
